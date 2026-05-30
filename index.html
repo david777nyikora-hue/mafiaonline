@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mafia - Multiplayer Online</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        
+        <!-- ECRAN MENIU PRINCIPAL -->
+        <div id="main-menu-screen" class="screen active">
+            <div class="game-title">
+                <h1>🎭 MAFIA</h1>
+                <p class="subtitle">Multiplayer Online - Fiecare pe dispozitivul său</p>
+            </div>
+            
+            <div class="menu-section">
+                <button id="create-room-btn" class="btn btn-primary">🎮 Creează Cameră (Host)</button>
+                <button id="join-room-btn" class="btn btn-secondary">🚪 Intră în Cameră</button>
+            </div>
+        </div>
+
+        <!-- ECRAN CREARE CAMERĂ -->
+        <div id="create-room-screen" class="screen">
+            <div class="setup-section">
+                <h2>Creează Cameră Nouă</h2>
+                
+                <div class="input-group">
+                    <label for="host-name">Numele tău:</label>
+                    <input type="text" id="host-name" placeholder="Introdu numele tău">
+                </div>
+                
+                <div class="input-group">
+                    <label for="host-mafia-count">Număr mafioți:</label>
+                    <input type="number" id="host-mafia-count" min="1" max="5" value="2">
+                </div>
+                
+                <button id="confirm-create-btn" class="btn btn-primary">Creează Cameră</button>
+                <button id="back-to-menu-btn" class="btn btn-secondary">Înapoi</button>
+            </div>
+        </div>
+
+        <!-- ECRAN INTRARE ÎN CAMERĂ -->
+        <div id="join-room-screen" class="screen">
+            <div class="setup-section">
+                <h2>Intră în Cameră</h2>
+                
+                <div class="input-group">
+                    <label for="player-name">Numele tău:</label>
+                    <input type="text" id="player-name" placeholder="Introdu numele tău">
+                </div>
+                
+                <div class="input-group">
+                    <label for="room-code">Cod cameră:</label>
+                    <input type="text" id="room-code" placeholder="Introdu codul (ex: ABC123)" maxlength="6" style="text-transform: uppercase;">
+                </div>
+                
+                <button id="confirm-join-btn" class="btn btn-primary">Intră în Joc</button>
+                <button id="back-to-menu-btn-2" class="btn btn-secondary">Înapoi</button>
+            </div>
+        </div>
+
+        <!-- ECRAN LOBBY (AȘTEPTARE JUCĂTORI) -->
+        <div id="lobby-screen" class="screen">
+            <div class="lobby-container">
+                <h1>🎮 Cameră de Joc</h1>
+                
+                <div class="room-code-display">
+                    <p>COD CAMERĂ:</p>
+                    <h2 id="display-room-code" class="room-code">------</h2>
+                    <p class="instruction">Trimite acest cod celorlalți jucători!</p>
+                </div>
+                
+                <div class="players-waiting">
+                    <h3>Jucători Conectați (<span id="player-count">0</span>)</h3>
+                    <div id="lobby-players-list"></div>
+                </div>
+                
+                <div id="host-controls" class="host-controls" style="display: none;">
+                    <button id="start-game-lobby-btn" class="btn btn-primary">Start Joc</button>
+                    <p class="instruction">Minim 4 jucători necesari</p>
+                </div>
+                
+                <button id="leave-lobby-btn" class="btn btn-danger">Părăsește Camera</button>
+            </div>
+        </div>
+
+        <!-- ECRAN ROLE REVEAL (VIZUALIZARE ROL) -->
+        <div id="my-role-screen" class="screen">
+            <div class="role-reveal-container">
+                <h2>Rolul Tău</h2>
+                <p class="instruction">Păstrează-ți rolul secret!</p>
+                
+                <div id="my-role-display" class="role-card">
+                    <div class="role-icon" id="my-role-icon">🎭</div>
+                    <h2 id="my-role-name">Rol</h2>
+                    <p id="my-role-description">Descriere</p>
+                </div>
+                
+                <div class="waiting-message">
+                    <p>⏳ Așteaptă ca toți jucătorii să își vadă rolurile...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ECRAN NOAPTE -->
+        <div id="night-screen" class="screen">
+            <div class="phase-header night-header">
+                <h1>🌙 NOAPTE</h1>
+                <p class="phase-subtitle">Orașul doarme...</p>
+                <p class="round-counter">Runda <span id="night-round">1</span></p>
+            </div>
+
+            <div id="night-action-container" class="action-container">
+                <!-- Conținut dinamic pentru acțiuni de noapte -->
+            </div>
+        </div>
+
+        <!-- ECRAN ZI -->
+        <div id="day-screen" class="screen">
+            <div class="phase-header day-header">
+                <h1>☀️ ZI</h1>
+                <p class="phase-subtitle">Orașul se trezește...</p>
+                <p class="round-counter">Runda <span id="day-round">1</span></p>
+            </div>
+
+            <div id="night-results" class="results-container">
+                <!-- Rezultate noapte -->
+            </div>
+
+            <div class="voting-section">
+                <h2>Votează pentru Eliminare</h2>
+                <p class="instruction">Discutați și decideți cine este suspect</p>
+                
+                <div id="alive-players-list" class="players-grid">
+                    <!-- Lista jucători vii pentru vot -->
+                </div>
+
+                <div id="vote-summary" class="vote-summary hidden">
+                    <h3>Rezumat Voturi</h3>
+                    <div id="vote-results"></div>
+                    <button id="execute-vote-btn" class="btn btn-danger">Execută Eliminarea</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ECRAN FINAL -->
+        <div id="end-screen" class="screen">
+            <div class="end-container">
+                <div id="victory-message" class="victory-message">
+                    <h1 id="winner-title">Victoria!</h1>
+                    <p id="winner-subtitle">Subtitlu</p>
+                </div>
+
+                <div class="final-stats">
+                    <h2>Statistici Joc</h2>
+                    <div id="final-player-list"></div>
+                </div>
+
+                <button id="play-again-btn" class="btn btn-primary">Joacă Din Nou</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="script-multiplayer.js"></script>
+</body>
+</html>

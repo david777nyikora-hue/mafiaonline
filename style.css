@@ -1,0 +1,704 @@
+/* ====== RESET & VARIABILE ====== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Culori principale */
+    --bg-dark: #0f0f1e;
+    --bg-card: #1a1a2e;
+    --bg-card-hover: #252538;
+    
+    /* Culori roluri */
+    --mafia-color: #ff3333;
+    --doctor-color: #33ff99;
+    --detective-color: #3399ff;
+    --citizen-color: #999999;
+    
+    /* Culori acțiuni */
+    --night-color: #1e1e3f;
+    --day-color: #ffd700;
+    
+    /* Text */
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+    --text-muted: #888888;
+    
+    /* Fonturi */
+    --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    font-family: var(--font-main);
+    background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    overflow-x: hidden;
+}
+
+.container {
+    width: 100%;
+    max-width: 900px;
+    position: relative;
+}
+
+/* ====== ECRANE ====== */
+.screen {
+    display: none;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.screen.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ====== ECRAN START ====== */
+.game-title {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.game-title h1 {
+    font-size: 4rem;
+    margin-bottom: 10px;
+    text-shadow: 0 0 20px rgba(255, 51, 51, 0.5);
+    letter-spacing: 10px;
+}
+
+.subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.setup-section {
+    background: var(--bg-card);
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.setup-section h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2rem;
+    color: var(--day-color);
+}
+
+.input-group {
+    margin-bottom: 25px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 15px;
+    background: var(--bg-dark);
+    border: 2px solid var(--bg-card-hover);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--day-color);
+}
+
+.player-names {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 25px 0;
+}
+
+.player-name-input {
+    padding: 12px 15px;
+    background: var(--bg-dark);
+    border: 2px solid var(--bg-card-hover);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.player-name-input:focus {
+    outline: none;
+    border-color: var(--detective-color);
+}
+
+/* ====== BUTOANE ====== */
+.btn {
+    padding: 15px 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: 100%;
+    margin-top: 15px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--mafia-color), #cc0000);
+    color: white;
+    box-shadow: 0 5px 15px rgba(255, 51, 51, 0.4);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px rgba(255, 51, 51, 0.6);
+}
+
+.btn-secondary {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+    border: 2px solid var(--text-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--bg-dark);
+    border-color: var(--day-color);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ff3333, #aa0000);
+    color: white;
+}
+
+/* ====== DISTRIBUȚIE ROLURI ====== */
+.role-reveal-container {
+    background: var(--bg-card);
+    padding: 50px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.instruction {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin: 20px 0;
+    font-style: italic;
+}
+
+#current-player-info h3 {
+    font-size: 2rem;
+    margin: 30px 0;
+    color: var(--day-color);
+}
+
+.role-card {
+    margin-top: 30px;
+    padding: 40px;
+    background: var(--bg-dark);
+    border-radius: 15px;
+    border: 3px solid;
+    animation: scaleIn 0.5s ease-out;
+}
+
+.role-card.hidden {
+    display: none;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.role-icon {
+    font-size: 5rem;
+    margin-bottom: 20px;
+}
+
+.role-card h2 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+}
+
+.role-card p {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+/* Culori pentru fiecare rol */
+.role-card.mafia {
+    border-color: var(--mafia-color);
+    background: linear-gradient(135deg, rgba(255, 51, 51, 0.1), var(--bg-dark));
+}
+
+.role-card.doctor {
+    border-color: var(--doctor-color);
+    background: linear-gradient(135deg, rgba(51, 255, 153, 0.1), var(--bg-dark));
+}
+
+.role-card.detective {
+    border-color: var(--detective-color);
+    background: linear-gradient(135deg, rgba(51, 153, 255, 0.1), var(--bg-dark));
+}
+
+.role-card.citizen {
+    border-color: var(--citizen-color);
+    background: linear-gradient(135deg, rgba(153, 153, 153, 0.1), var(--bg-dark));
+}
+
+/* ====== FAZĂ NOAPTE/ZI ====== */
+.phase-header {
+    text-align: center;
+    padding: 40px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.night-header {
+    background: linear-gradient(135deg, var(--night-color), var(--bg-card));
+    border: 2px solid rgba(51, 153, 255, 0.3);
+}
+
+.day-header {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), var(--bg-card));
+    border: 2px solid var(--day-color);
+}
+
+.phase-header h1 {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.phase-subtitle {
+    font-size: 1.3rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.round-counter {
+    margin-top: 15px;
+    font-size: 1.1rem;
+    color: var(--day-color);
+    font-weight: 600;
+}
+
+/* ====== ACȚIUNI NOAPTE ====== */
+.action-container {
+    background: var(--bg-card);
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.action-info {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.action-info h2 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.player-card {
+    background: var(--bg-dark);
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid var(--bg-card-hover);
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.player-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--day-color);
+    box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3);
+}
+
+.player-card.selected {
+    border-color: var(--mafia-color);
+    background: rgba(255, 51, 51, 0.1);
+    box-shadow: 0 5px 20px rgba(255, 51, 51, 0.4);
+}
+
+.player-card.dead {
+    opacity: 0.4;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.player-card.dead::after {
+    content: '💀';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+}
+
+.player-card h3 {
+    font-size: 1.3rem;
+    margin-bottom: 10px;
+}
+
+.player-card .status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* ====== REZULTATE & VOTURI ====== */
+.results-container {
+    background: var(--bg-card);
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.result-message {
+    font-size: 1.5rem;
+    margin: 15px 0;
+    padding: 20px;
+    border-radius: 10px;
+    background: var(--bg-dark);
+}
+
+.result-message.death {
+    border-left: 5px solid var(--mafia-color);
+}
+
+.result-message.saved {
+    border-left: 5px solid var(--doctor-color);
+}
+
+.voting-section {
+    background: var(--bg-card);
+    padding: 40px;
+    border-radius: 15px;
+}
+
+.voting-section h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 2rem;
+}
+
+.vote-summary {
+    margin-top: 30px;
+    padding: 25px;
+    background: var(--bg-dark);
+    border-radius: 10px;
+}
+
+.vote-summary.hidden {
+    display: none;
+}
+
+.vote-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+    margin: 10px 0;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.vote-count {
+    font-weight: 600;
+    color: var(--day-color);
+}
+
+/* ====== ECRAN FINAL ====== */
+.end-container {
+    background: var(--bg-card);
+    padding: 50px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+.victory-message {
+    margin-bottom: 40px;
+    padding: 40px;
+    border-radius: 15px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.victory-message.mafia-win {
+    background: linear-gradient(135deg, rgba(255, 51, 51, 0.2), var(--bg-dark));
+    border: 3px solid var(--mafia-color);
+}
+
+.victory-message.town-win {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), var(--bg-dark));
+    border: 3px solid var(--day-color);
+}
+
+.victory-message h1 {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.final-stats {
+    background: var(--bg-dark);
+    padding: 30px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+}
+
+.final-stats h2 {
+    margin-bottom: 20px;
+    color: var(--day-color);
+}
+
+.final-player-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin: 10px 0;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.player-final-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.role-badge {
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.role-badge.mafia {
+    background: var(--mafia-color);
+}
+
+.role-badge.doctor {
+    background: var(--doctor-color);
+    color: #000;
+}
+
+.role-badge.detective {
+    background: var(--detective-color);
+}
+
+.role-badge.citizen {
+    background: var(--citizen-color);
+}
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 768px) {
+    .game-title h1 {
+        font-size: 2.5rem;
+        letter-spacing: 5px;
+    }
+    
+    .setup-section {
+        padding: 25px;
+    }
+    
+    .player-names {
+        grid-template-columns: 1fr;
+    }
+    
+    .players-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .phase-header h1 {
+        font-size: 2rem;
+    }
+}
+
+/* ====== MULTIPLAYER - MENIU & LOBBY ====== */
+.menu-section {
+    background: var(--bg-card);
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.lobby-container {
+    background: var(--bg-card);
+    padding: 50px;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+.room-code-display {
+    background: var(--bg-dark);
+    padding: 30px;
+    border-radius: 15px;
+    margin: 30px 0;
+    border: 3px solid var(--day-color);
+}
+
+.room-code-display p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.room-code {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--day-color);
+    letter-spacing: 15px;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    margin: 15px 0;
+    font-family: 'Courier New', monospace;
+}
+
+.players-waiting {
+    margin: 30px 0;
+}
+
+.players-waiting h3 {
+    color: var(--day-color);
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+
+#lobby-players-list {
+    background: var(--bg-dark);
+    padding: 20px;
+    border-radius: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.lobby-player-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin: 10px 0;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border-left: 4px solid var(--detective-color);
+    transition: all 0.3s;
+}
+
+.lobby-player-item:hover {
+    transform: translateX(5px);
+    border-left-color: var(--day-color);
+}
+
+.host-badge {
+    background: var(--day-color);
+    color: #000;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.host-controls {
+    margin-top: 30px;
+}
+
+.waiting-message {
+    margin-top: 30px;
+    padding: 20px;
+    background: var(--bg-dark);
+    border-radius: 10px;
+}
+
+.waiting-message p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    font-style: italic;
+}
+
+.waiting-spinner {
+    font-size: 3rem;
+    margin-top: 20px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Scrollbar personalizat pentru listă jucători */
+#lobby-players-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#lobby-players-list::-webkit-scrollbar-track {
+    background: var(--bg-card);
+    border-radius: 10px;
+}
+
+#lobby-players-list::-webkit-scrollbar-thumb {
+    background: var(--day-color);
+    border-radius: 10px;
+}
+
+#lobby-players-list::-webkit-scrollbar-thumb:hover {
+    background: var(--detective-color);
+}
+
