@@ -112,16 +112,6 @@ function updateTotalRoles() {
     const total = mafia + doctor + detective;
     document.getElementById('total-special-roles').textContent = total;
 }
-        e.target.value = e.target.value.toUpperCase();
-    });
-    
-    // Lobby
-    document.getElementById('start-game-lobby-btn').addEventListener('click', startGame);
-    document.getElementById('leave-lobby-btn').addEventListener('click', () => location.reload());
-    
-    // Joc din nou
-    document.getElementById('play-again-btn').addEventListener('click', () => location.reload());
-}
 
 // ====== SOCKET LISTENERS ======
 function setupSocketListeners() {
