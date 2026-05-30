@@ -172,6 +172,16 @@ function setupSocketListeners() {
         updateLobbyPlayers(data.players);
     });
     
+    // Lobby închis (host a plecat)
+    socket.on('lobby-closed', (data) => {
+        showNotification(data.message, 'error');
+        
+        // Așteaptă 2 secunde și redirecționează la meniul principal
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+    });
+    
     // Joc început
     socket.on('game-started', (data) => {
         myRole = data.role;

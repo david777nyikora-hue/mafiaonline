@@ -478,21 +478,28 @@ io.on('connection', (socket) => {
         if (roomCode) {
             const room = gameRooms.get(roomCode);
             if (room) {
-                room.players = room.players.filter(p => p.id !== socket.id);
-                
-                // Dacă host-ul pleacă, transferă host-ul
-                if (room.host === socket.id && room.players.length > 0) {
-                    room.host = room.players[0].id;
-                    room.players[0].isHost = true;
-                    io.to(roomCode).emit('new-host', { hostId: room.host });
-                }
-                
-                // Dacă nu mai sunt jucători, șterge camera
-                if (room.players.length === 0) {
+                // Dacă host-ul pleacă, închide întregul lobby
+                if (room.host === socket.id) {
+                    console.log(`🚪 Host-ul a părăsit camera ${roomCode} - lobby închis`);
+                    
+                    // Notifică toți jucătorii că lobby-ul se închide
+                    io.to(roomCode).emit('lobby-closed', {
+                        message: 'Host-ul a părăsit jocul. Lobby-ul a fost închis.'
+                    });
+                    
+                    // Șterge camera
                     gameRooms.delete(roomCode);
-                    console.log(`🗑️ Camera ${roomCode} ștearsă`);
                 } else {
-                    io.to(roomCode).emit('player-left', { players: room.players });
+                    // Jucător normal pleacă
+                    room.players = room.players.filter(p => p.id !== socket.id);
+                    
+                    // Dacă nu mai sunt jucători, șterge camera
+                    if (room.players.length === 0) {
+                        gameRooms.delete(roomCode);
+                        console.log(`🗑️ Camera ${roomCode} ștearsă`);
+                    } else {
+                        io.to(roomCode).emit('player-left', { players: room.players });
+                    }
                 }
             }
         }
