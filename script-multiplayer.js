@@ -39,6 +39,7 @@ const ROLES = {
 // Stare locală
 let myRole = null;
 let myId = null;
+let myName = null; // Numele meu pentru reconnect
 let roomCode = null;
 let isHost = false;
 let currentPlayers = [];
@@ -183,6 +184,9 @@ function setupRoleChat(role) {
 // Leave lobby
 function leaveLobby() {
     if (confirm('Sigur vrei să părăsești camera?')) {
+        // Curăță datele de reconnect
+        localStorage.removeItem('mafiaGameRoomCode');
+        localStorage.removeItem('mafiaGamePlayerName');
         location.reload();
     }
 }
@@ -231,6 +235,10 @@ function setupSocketListeners() {
     
     // Lobby închis (host a plecat)
     socket.on('lobby-closed', (data) => {
+        // Curăță datele de reconnect când lobby-ul se închide
+        localStorage.removeItem('mafiaGameRoomCode');
+        localStorage.removeItem('mafiaGamePlayerName');
+        
         showNotification(data.message, 'error');
         
         // Așteaptă 2 secunde și redirecționează la meniul principal
@@ -243,6 +251,10 @@ function setupSocketListeners() {
     socket.on('game-started', (data) => {
         myRole = data.role;
         currentPlayers = data.players;
+        
+        // Salvează roomCode și myName pentru reconnect
+        localStorage.setItem('mafiaGameRoomCode', roomCode);
+        localStorage.setItem('mafiaGamePlayerName', myName);
         
         // Dacă ești Mafia, primești lista echipei
         if (data.mafiaTeam) {
@@ -309,6 +321,9 @@ function setupSocketListeners() {
     
     // Joc terminat
     socket.on('game-ended', (data) => {
+        // Curăță datele de reconnect când jocul se termină
+        localStorage.removeItem('mafiaGameRoomCode');
+        localStorage.removeItem('mafiaGamePlayerName');
         showGameEnd(data);
     });
     
@@ -382,6 +397,131 @@ function setupSocketListeners() {
             updateNarratorVotes(data);
         }
     });
+    
+    // Disconnect/Reconnect events
+    socket.on('disconnect', () => {
+        console.log('⚠️ Deconectat de la server');
+        
+        // Dacă suntem în joc (nu în lobby/menu), arată opțiunea de reconnect
+        const savedRoomCode = localStorage.getItem('mafiaGameRoomCode');
+        const savedPlayerName = localStorage.getItem('mafiaGamePlayerName');
+        
+        if (savedRoomCode && savedPlayerName) {
+            showReconnectOption();
+        }
+    });
+    
+    socket.on('player-disconnected', (data) => {
+        showNotification(`⚠️ ${data.playerName} s-a deconectat - are 5 minute pentru reconnect`, 'warning');
+        currentPlayers = data.players;
+    });
+    
+    socket.on('player-reconnected', (data) => {
+        showNotification(`✅ ${data.playerName} s-a reconectat!`, 'success');
+        currentPlayers = data.players;
+    });
+    
+    socket.on('player-removed-timeout', (data) => {
+        showNotification(`❌ ${data.playerName} a fost eliminat (timeout reconnect)`, 'error');
+        currentPlayers = data.players;
+    });
+    
+    socket.on('game-rejoined', (data) => {
+        // Restaurează starea completă de joc
+        const player = data.player;
+        const room = data.room;
+        
+        roomCode = room.code;
+        currentPlayers = room.players;
+        myRole = player.role;
+        
+        // Restaurează echipele
+        if (room.gameState.alivePlayers) {
+            const alivePlayers = room.gameState.alivePlayers;
+            mafiaTeam = alivePlayers.filter(p => p.role === 'MAFIA');
+            doctorTeam = alivePlayers.filter(p => p.role === 'DOCTOR');
+            detectiveTeam = alivePlayers.filter(p => p.role === 'DETECTIVE');
+        }
+        
+        // Dacă ești Narrator
+        if (myRole === 'NARRATOR') {
+            allRoles = room.players.filter(p => p.role !== undefined);
+        }
+        
+        showNotification('✅ Reconectat cu succes!', 'success');
+        
+        // Navighează la ecranul potrivit în funcție de faza jocului
+        if (room.gameState.phase === 'night') {
+            startNightPhase({ round: room.gameState.round, alivePlayers: room.gameState.alivePlayers });
+        } else if (room.gameState.phase === 'day') {
+            startDayPhase({ 
+                round: room.gameState.round, 
+                alivePlayers: room.gameState.alivePlayers,
+                victim: null,
+                saved: false
+            });
+        } else if (myRole === 'NARRATOR') {
+            showNarratorScreen();
+        } else {
+            showMyRole();
+        }
+    });
+}
+
+// ====== FUNCȚIE RECONNECT ======
+function showReconnectOption() {
+    const container = document.querySelector('.container');
+    const reconnectDiv = document.createElement('div');
+    reconnectDiv.id = 'reconnect-overlay';
+    reconnectDiv.className = 'reconnect-overlay';
+    reconnectDiv.innerHTML = `
+        <div class="reconnect-box">
+            <h2>⚠️ Conexiune Pierdută</h2>
+            <p>S-a întrerupt conexiunea cu serverul.</p>
+            <p>Vrei să te reconectezi la joc?</p>
+            <button class="btn btn-primary" onclick="rejoinGame()">🔄 Reconectează</button>
+            <button class="btn btn-secondary" onclick="cancelReconnect()">❌ Anulează</button>
+        </div>
+    `;
+    container.appendChild(reconnectDiv);
+}
+
+function rejoinGame() {
+    const savedRoomCode = localStorage.getItem('mafiaGameRoomCode');
+    const savedPlayerName = localStorage.getItem('mafiaGamePlayerName');
+    
+    if (!savedRoomCode || !savedPlayerName) {
+        showNotification('Nu există date de reconnect!', 'error');
+        return;
+    }
+    
+    // Elimină overlay-ul
+    const overlay = document.getElementById('reconnect-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    
+    showNotification('🔄 Încerc reconnect...', 'info');
+    
+    socket.emit('rejoin-room', {
+        roomCode: savedRoomCode,
+        playerName: savedPlayerName
+    });
+}
+
+function cancelReconnect() {
+    // Curăță localStorage
+    localStorage.removeItem('mafiaGameRoomCode');
+    localStorage.removeItem('mafiaGamePlayerName');
+    
+    // Elimină overlay-ul
+    const overlay = document.getElementById('reconnect-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    
+    // Revin la meniul principal
+    switchScreen('main-menu-screen');
 }
 
 // ====== FUNCȚII CAMERĂ ======
@@ -397,7 +537,8 @@ function createRoom() {
         return;
     }
     
-    // Salvează numele dacă checkbox-ul este bifat
+    // Salvează numele global și în localStorage
+    myName = playerName;
     saveName(playerName, rememberName);
     
     socket.emit('create-room', {
@@ -425,7 +566,8 @@ function joinRoom() {
         return;
     }
     
-    // Salvează numele dacă checkbox-ul este bifat
+    // Salvează numele global și în localStorage
+    myName = playerName;
     saveName(playerName, rememberName);
     
     socket.emit('join-room', {

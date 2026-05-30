@@ -470,6 +470,80 @@ io.on('connection', (socket) => {
         });
     });
     
+    // REJOIN ROOM - Reconectare jucător deconectat
+    socket.on('rejoin-room', (data) => {
+        const { roomCode, playerName } = data;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room) {
+            socket.emit('error', { message: 'Camera nu mai există!' });
+            return;
+        }
+        
+        // Găsește jucătorul deconectat după nume
+        const player = room.players.find(p => p.name === playerName && p.disconnected);
+        
+        if (!player) {
+            socket.emit('error', { message: 'Nu ai fost în această cameră sau ai fost eliminat definitiv!' });
+            return;
+        }
+        
+        // Anulează timeout-ul de ștergere dacă există
+        if (player.disconnectTimeout) {
+            clearTimeout(player.disconnectTimeout);
+            delete player.disconnectTimeout;
+        }
+        
+        // Actualizează socket ID-ul și marchează ca reconectat
+        const oldId = player.id;
+        player.id = socket.id;
+        player.disconnected = false;
+        
+        // Actualizează socket ID în alivePlayers/deadPlayers
+        const alivePlayer = room.gameState.alivePlayers.find(p => p.id === oldId);
+        if (alivePlayer) {
+            alivePlayer.id = socket.id;
+        }
+        const deadPlayer = room.gameState.deadPlayers.find(p => p.id === oldId);
+        if (deadPlayer) {
+            deadPlayer.id = socket.id;
+        }
+        
+        // Actualizează voturile și team choices
+        if (room.gameState.votes[oldId] !== undefined) {
+            room.gameState.votes[socket.id] = room.gameState.votes[oldId];
+            delete room.gameState.votes[oldId];
+        }
+        Object.keys(room.gameState.teamChoices).forEach(actionType => {
+            if (room.gameState.teamChoices[actionType][oldId] !== undefined) {
+                room.gameState.teamChoices[actionType][socket.id] = room.gameState.teamChoices[actionType][oldId];
+                delete room.gameState.teamChoices[actionType][oldId];
+            }
+        });
+        
+        socket.join(roomCode);
+        socket.roomCode = roomCode;
+        
+        console.log(`🔄 ${playerName} s-a reconectat în camera ${roomCode}`);
+        
+        // Trimite starea completă de joc la jucător
+        socket.emit('game-rejoined', {
+            player: player,
+            room: {
+                code: roomCode,
+                players: room.players,
+                gameState: room.gameState,
+                started: room.started
+            }
+        });
+        
+        // Notifică ceilalți jucători
+        socket.to(roomCode).emit('player-reconnected', {
+            playerName: playerName,
+            players: room.players
+        });
+    });
+    
     // Disconnect
     socket.on('disconnect', () => {
         console.log('🔴 Jucător deconectat:', socket.id);
@@ -490,35 +564,47 @@ io.on('connection', (socket) => {
                     // Șterge camera
                     gameRooms.delete(roomCode);
                 } else {
-                    // Jucător normal pleacă
-                    room.players = room.players.filter(p => p.id !== socket.id);
+                    const player = room.players.find(p => p.id === socket.id);
                     
-                    // Elimină jucătorul din alivePlayers și deadPlayers
-                    room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== socket.id);
-                    room.gameState.deadPlayers = room.gameState.deadPlayers.filter(p => p.id !== socket.id);
+                    if (!player) return;
                     
-                    // Curăță alegerea jucătorului din teamChoices dacă există
-                    Object.keys(room.gameState.teamChoices).forEach(actionType => {
-                        delete room.gameState.teamChoices[actionType][socket.id];
-                    });
-                    
-                    // Curăță votul jucătorului din votes dacă există
-                    delete room.gameState.votes[socket.id];
-                    
-                    // Dacă nu mai sunt jucători, șterge camera
-                    if (room.players.length === 0) {
-                        gameRooms.delete(roomCode);
-                        console.log(`🗑️ Camera ${roomCode} ștearsă`);
-                    } else {
-                        io.to(roomCode).emit('player-left', { players: room.players });
+                    // Dacă jocul a început, marchează ca deconectat în loc să ștergi
+                    if (room.started) {
+                        player.disconnected = true;
                         
-                        // Verifică dacă jocul poate continua după deconectare
-                        if (room.started) {
+                        console.log(`⏳ ${player.name} deconectat - are 5 minute pentru reconnect`);
+                        
+                        // Notifică ceilalți jucători
+                        io.to(roomCode).emit('player-disconnected', {
+                            playerName: player.name,
+                            players: room.players
+                        });
+                        
+                        // Setează timeout de 5 minute pentru ștergere definitivă
+                        player.disconnectTimeout = setTimeout(() => {
+                            console.log(`🗑️ ${player.name} eliminat definitiv după timeout`);
+                            
+                            // Șterge jucătorul definitiv
+                            room.players = room.players.filter(p => p.id !== socket.id);
+                            room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== socket.id);
+                            room.gameState.deadPlayers = room.gameState.deadPlayers.filter(p => p.id !== socket.id);
+                            
+                            // Curăță alegerea jucătorului
+                            Object.keys(room.gameState.teamChoices).forEach(actionType => {
+                                delete room.gameState.teamChoices[actionType][socket.id];
+                            });
+                            delete room.gameState.votes[socket.id];
+                            
+                            // Notifică eliminarea definitivă
+                            io.to(roomCode).emit('player-removed-timeout', {
+                                playerName: player.name,
+                                players: room.players
+                            });
+                            
+                            // Verifică dacă jocul poate continua
                             if (room.gameState.phase === 'night') {
-                                // Re-verifică dacă toate acțiunile de noapte sunt complete
                                 checkNightActionsComplete(roomCode);
                             } else if (room.gameState.phase === 'day') {
-                                // Re-verifică dacă toate voturile sunt complete
                                 const aliveCount = room.gameState.alivePlayers.length;
                                 const voteCount = Object.keys(room.gameState.votes).length;
                                 if (voteCount === aliveCount && aliveCount > 0) {
@@ -526,8 +612,17 @@ io.on('connection', (socket) => {
                                 }
                             }
                             
-                            // Verifică condiția de victorie după deconectare
                             checkWinCondition(roomCode);
+                        }, 5 * 60 * 1000); // 5 minute
+                    } else {
+                        // În lobby, șterge direct
+                        room.players = room.players.filter(p => p.id !== socket.id);
+                        
+                        if (room.players.length === 0) {
+                            gameRooms.delete(roomCode);
+                            console.log(`🗑️ Camera ${roomCode} ștearsă`);
+                        } else {
+                            io.to(roomCode).emit('player-left', { players: room.players });
                         }
                     }
                 }
