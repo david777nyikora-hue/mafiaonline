@@ -54,9 +54,39 @@ let isDetectiveChatOpen = false;
 let teamChoices = {}; // { playerId: targetId }
 let currentNightAction = null; // Stochează detalii despre acțiunea curentă { type, players, isTeam }
 
+// ====== FUNCȚII PENTRU SALVAREA NUMELUI ======
+function loadSavedName() {
+    const savedName = localStorage.getItem('mafiaPlayerName');
+    const rememberName = localStorage.getItem('mafiaRememberName') === 'true';
+    
+    if (savedName && rememberName) {
+        // Precompletează ambele input-uri
+        const hostInput = document.getElementById('host-name');
+        const playerInput = document.getElementById('player-name');
+        const rememberHostCheckbox = document.getElementById('remember-host-name');
+        const rememberPlayerCheckbox = document.getElementById('remember-player-name');
+        
+        if (hostInput) hostInput.value = savedName;
+        if (playerInput) playerInput.value = savedName;
+        if (rememberHostCheckbox) rememberHostCheckbox.checked = true;
+        if (rememberPlayerCheckbox) rememberPlayerCheckbox.checked = true;
+    }
+}
+
+function saveName(name, remember) {
+    if (remember) {
+        localStorage.setItem('mafiaPlayerName', name);
+        localStorage.setItem('mafiaRememberName', 'true');
+    } else {
+        localStorage.removeItem('mafiaPlayerName');
+        localStorage.removeItem('mafiaRememberName');
+    }
+}
+
 // ====== INIȚIALIZARE ======
 document.addEventListener('DOMContentLoaded', () => {
     hideAllChats(); // Ascunde toate chat-urile la început
+    loadSavedName(); // Încarcă numele salvat din localStorage
     initializeEventListeners();
     setupSocketListeners();
 });
@@ -69,6 +99,32 @@ function initializeEventListeners() {
     // Back buttons
     document.getElementById('back-to-menu-btn').addEventListener('click', () => switchScreen('main-menu-screen'));
     document.getElementById('back-to-menu-btn-2').addEventListener('click', () => switchScreen('main-menu-screen'));
+    
+    // Remember name checkboxes
+    const rememberHostCheckbox = document.getElementById('remember-host-name');
+    const rememberPlayerCheckbox = document.getElementById('remember-player-name');
+    
+    if (rememberHostCheckbox) {
+        rememberHostCheckbox.addEventListener('change', (e) => {
+            const name = document.getElementById('host-name').value.trim();
+            if (name) {
+                saveName(name, e.target.checked);
+            } else if (!e.target.checked) {
+                saveName('', false);
+            }
+        });
+    }
+    
+    if (rememberPlayerCheckbox) {
+        rememberPlayerCheckbox.addEventListener('change', (e) => {
+            const name = document.getElementById('player-name').value.trim();
+            if (name) {
+                saveName(name, e.target.checked);
+            } else if (!e.target.checked) {
+                saveName('', false);
+            }
+        });
+    }
     
     // Role count update
     const roleInputs = ['host-mafia-count', 'host-doctor-count', 'host-detective-count'];
@@ -334,11 +390,15 @@ function createRoom() {
     const mafiaCount = parseInt(document.getElementById('host-mafia-count').value);
     const doctorCount = parseInt(document.getElementById('host-doctor-count').value);
     const detectiveCount = parseInt(document.getElementById('host-detective-count').value);
+    const rememberName = document.getElementById('remember-host-name').checked;
     
     if (!playerName) {
         showNotification('Introdu un nume!', 'error');
         return;
     }
+    
+    // Salvează numele dacă checkbox-ul este bifat
+    saveName(playerName, rememberName);
     
     socket.emit('create-room', {
         playerName: playerName,
@@ -353,6 +413,7 @@ function createRoom() {
 function joinRoom() {
     const playerName = document.getElementById('player-name').value.trim();
     const code = document.getElementById('room-code').value.trim().toUpperCase();
+    const rememberName = document.getElementById('remember-player-name').checked;
     
     if (!playerName) {
         showNotification('Introdu un nume!', 'error');
@@ -363,6 +424,9 @@ function joinRoom() {
         showNotification('Introdu un cod valid de 6 caractere!', 'error');
         return;
     }
+    
+    // Salvează numele dacă checkbox-ul este bifat
+    saveName(playerName, rememberName);
     
     socket.emit('join-room', {
         roomCode: code,
