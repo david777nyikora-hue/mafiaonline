@@ -740,13 +740,17 @@ function showDetectiveAction(players) {
 
 function renderActionTargets(players, actionType, isTeamAction = false) {
     const container = document.getElementById('action-targets');
-    const confirmBtn = document.getElementById('confirm-action-btn');
+    const oldConfirmBtn = document.getElementById('confirm-action-btn');
     let selectedTarget = null;
     let selectedTargetName = null;
     
     // Curăță containerul și resetează butonul
     container.innerHTML = '';
-    confirmBtn.disabled = true;
+    oldConfirmBtn.disabled = true;
+    
+    // Clonează butonul IMEDIAT pentru a elimina event listeners vechi
+    const confirmBtn = oldConfirmBtn.cloneNode(true);
+    oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
     
     players.forEach(player => {
         const card = document.createElement('div');
@@ -758,17 +762,13 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
             card.classList.add('selected');
             selectedTarget = player.id;
             selectedTargetName = player.name;
-            confirmBtn.disabled = false;
+            confirmBtn.disabled = false; // Acum modifică NOUL buton
         });
         
         container.appendChild(card);
     });
     
-    // Clonează butonul pentru a elimina event listeners vechi
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    
-    newConfirmBtn.addEventListener('click', () => {
+    confirmBtn.addEventListener('click', () => {
         if (selectedTarget) {
             if (isTeamAction) {
                 // Trimite alegerea către server pentru verificare consens
@@ -782,8 +782,8 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
                     c.style.pointerEvents = 'none';
                     c.style.opacity = '0.6';
                 });
-                newConfirmBtn.disabled = true;
-                newConfirmBtn.textContent = 'Alegere trimisă...';
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Alegere trimisă...';
                 
                 // Afișează mesaj de așteptare consens
                 const statusDiv = document.getElementById('team-consensus-status');
