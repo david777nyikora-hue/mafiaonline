@@ -50,8 +50,12 @@ let isMafiaChatOpen = false;
 let isDoctorChatOpen = false;
 let isDetectiveChatOpen = false;
 
+// Team consensus pentru night actions
+let teamChoices = {}; // { playerId: targetId }
+
 // ====== INIȚIALIZARE ======
 document.addEventListener('DOMContentLoaded', () => {
+    hideAllChats(); // Ascunde toate chat-urile la început
     initializeEventListeners();
     setupSocketListeners();
 });
@@ -258,6 +262,43 @@ function setupSocketListeners() {
     socket.on('detective-chat-message', (message) => {
         displayRoleMessage('detective', message);
     });
+    
+    // Team consensus updates
+    socket.on('team-consensus-update', (data) => {
+        updateConsensusStatus(data);
+    });
+    
+    socket.on('team-consensus-achieved', (data) => {
+        // Consensul a fost atins, confirmă acțiunea
+        const container = document.getElementById('night-action-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="action-info">
+                    <h2>✅ Consens Echipă Atins!</h2>
+                    <p class="instruction">Toți membrii echipei au ales: <strong>${data.targetName}</strong></p>
+                    <p class="instruction">Așteaptă ca ceilalți jucători să își facă alegerile...</p>
+                    <div class="waiting-spinner">⏳</div>
+                </div>
+            `;
+        }
+    });
+    
+    socket.on('team-consensus-failed', (data) => {
+        showNotification('❌ Echipa ta a ales ținte diferite! Alegeți din nou aceeași persoană.', 'error');
+    });
+    
+    // Narrator updates - real-time monitoring
+    socket.on('narrator-action-update', (data) => {
+        if (myRole === 'NARRATOR') {
+            updateNarratorActions(data);
+        }
+    });
+    
+    socket.on('narrator-vote-update', (data) => {
+        if (myRole === 'NARRATOR') {
+            updateNarratorVotes(data);
+        }
+    });
 }
 
 // ====== FUNCȚII CAMERĂ ======
@@ -426,8 +467,72 @@ function showNarratorScreen() {
     });
 }
 
+function updateNarratorActions(data) {
+    const actionsList = document.getElementById('narrator-actions-list');
+    if (!actionsList) return;
+    
+    actionsList.innerHTML = '<h3>Acțiuni curente:</h3>';
+    
+    if (data.actions.mafia !== undefined) {
+        const target = data.players.find(p => p.id === data.actions.mafia);
+        actionsList.innerHTML += `<p>🔫 Mafia atacă: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+    }
+    
+    if (data.actions.doctor !== undefined) {
+        const target = data.players.find(p => p.id === data.actions.doctor);
+        actionsList.innerHTML += `<p>💊 Doctor salvează: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+    }
+    
+    if (data.actions.detective !== undefined) {
+        const target = data.players.find(p => p.id === data.actions.detective);
+        actionsList.innerHTML += `<p>🔍 Detectiv investighează: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+    }
+    
+    if (Object.keys(data.actions).length === 0) {
+        actionsList.innerHTML += '<p class="instruction">⏳ Nicio acțiune înregistrată încă...</p>';
+    }
+}
+
+function updateNarratorVotes(data) {
+    const votesList = document.getElementById('narrator-votes-list');
+    if (!votesList) return;
+    
+    votesList.innerHTML = '<h3>Voturi curente:</h3>';
+    
+    const voteCounts = {};
+    Object.entries(data.votes).forEach(([voterId, targetId]) => {
+        const voter = data.players.find(p => p.id === voterId);
+        const target = data.players.find(p => p.id === targetId);
+        
+        if (voter && target) {
+            votesList.innerHTML += `<p>• <strong>${voter.name}</strong> → ${target.name}</p>`;
+            voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+        }
+    });
+    
+    if (Object.keys(data.votes).length === 0) {
+        votesList.innerHTML += '<p class="instruction">⏳ Niciun vot înregistrat încă...</p>';
+    } else {
+        votesList.innerHTML += '<br><h3>Sumar voturi:</h3>';
+        Object.entries(voteCounts).forEach(([targetId, count]) => {
+            const target = data.players.find(p => p.id === targetId);
+            votesList.innerHTML += `<p><strong>${target ? target.name : 'Unknown'}</strong>: ${count} voturi</p>`;
+        });
+    }
+}
+
 // ====== FAZA DE NOAPTE ======
 function startNightPhase(data) {
+    // Narrator rămâne pe ecranul său de monitoring
+    if (myRole === 'NARRATOR') {
+        // Resetează lista de acțiuni pentru noua noapte
+        const actionsList = document.getElementById('narrator-actions-list');
+        if (actionsList) {
+            actionsList.innerHTML = '<h3>Acțiuni curente:</h3><p class="instruction">⏳ Nicio acțiune înregistrată încă...</p>';
+        }
+        return; // Narrator nu participă la acțiuni de noapte
+    }
+    
     switchScreen('night-screen');
     document.getElementById('night-round').textContent = data.round;
     
@@ -459,52 +564,76 @@ function showMafiaAction(players) {
         return player && player.role !== 'MAFIA';
     });
     
+    // Verifică dacă sunt în echipă (2+ membri)
+    const isTeamAction = mafiaTeam.length >= 2;
+    const instructionText = isTeamAction ? 
+        '⚠️ ECHIPĂ: Toți membrii Mafia trebuie să aleagă ACEEAȘI victimă!' : 
+        'Selectează un jucător pentru eliminare';
+    
     container.innerHTML = `
         <div class="action-info">
             <h2>🔫 Alege Victima</h2>
-            <p class="instruction">Selectează un jucător pentru eliminare</p>
+            <p class="instruction">${instructionText}</p>
+            ${isTeamAction ? '<div id="team-consensus-status" class="consensus-status"></div>' : ''}
         </div>
         <div class="players-grid" id="action-targets"></div>
         <button class="btn btn-danger" id="confirm-action-btn" disabled>Confirmă Alegerea</button>
     `;
     
-    renderActionTargets(targets, 'mafia');
+    renderActionTargets(targets, 'mafia', isTeamAction);
 }
 
 function showDoctorAction(players) {
     const container = document.getElementById('night-action-container');
     
+    const isTeamAction = doctorTeam.length >= 2;
+    const instructionText = isTeamAction ? 
+        '⚠️ ECHIPĂ: Toți doctorii trebuie să aleagă ACEEAȘI persoană de salvat!' : 
+        'Alege pe cine să salvezi (poți să te alegi pe tine)';
+    
     container.innerHTML = `
         <div class="action-info">
             <h2>💊 Salvează un Jucător</h2>
-            <p class="instruction">Alege pe cine să salvezi (poți să te alegi pe tine)</p>
+            <p class="instruction">${instructionText}</p>
+            ${isTeamAction ? '<div id="team-consensus-status" class="consensus-status"></div>' : ''}
         </div>
         <div class="players-grid" id="action-targets"></div>
         <button class="btn btn-secondary" id="confirm-action-btn" disabled>Confirmă Alegerea</button>
     `;
     
-    renderActionTargets(players, 'doctor');
+    renderActionTargets(players, 'doctor', isTeamAction);
 }
 
 function showDetectiveAction(players) {
     const container = document.getElementById('night-action-container');
     const targets = players.filter(p => p.id !== socket.id);
     
+    const isTeamAction = detectiveTeam.length >= 2;
+    const instructionText = isTeamAction ? 
+        '⚠️ ECHIPĂ: Toți detectivii trebuie să aleagă ACEEAȘI persoană de investigat!' : 
+        'Selectează un jucător pentru a afla dacă este Mafia';
+    
     container.innerHTML = `
         <div class="action-info">
             <h2>🔍 Investighează un Jucător</h2>
-            <p class="instruction">Selectează un jucător pentru a afla dacă este Mafia</p>
+            <p class="instruction">${instructionText}</p>
+            ${isTeamAction ? '<div id="team-consensus-status" class="consensus-status"></div>' : ''}
         </div>
         <div class="players-grid" id="action-targets"></div>
         <button class="btn btn-secondary" id="confirm-action-btn" disabled>Confirmă Investigația</button>
     `;
     
-    renderActionTargets(targets, 'detective');
+    renderActionTargets(targets, 'detective', isTeamAction);
 }
 
-function renderActionTargets(players, actionType) {
+function renderActionTargets(players, actionType, isTeamAction = false) {
     const container = document.getElementById('action-targets');
     let selectedTarget = null;
+    
+    // Reset team choices pentru această rundă
+    if (isTeamAction) {
+        teamChoices = {};
+    }
     
     players.forEach(player => {
         const card = document.createElement('div');
@@ -523,19 +652,28 @@ function renderActionTargets(players, actionType) {
     
     document.getElementById('confirm-action-btn').addEventListener('click', () => {
         if (selectedTarget) {
-            socket.emit('night-action', {
-                actionType: actionType,
-                targetId: selectedTarget
-            });
-            
-            // Afișează mesaj de confirmare
-            container.parentElement.innerHTML = `
-                <div class="action-info">
-                    <h2>✅ Acțiune Confirmată</h2>
-                    <p class="instruction">Așteaptă ca ceilalți jucători să își facă alegerile...</p>
-                    <div class="waiting-spinner">⏳</div>
-                </div>
-            `;
+            if (isTeamAction) {
+                // Trimite alegerea către server pentru verificare consens
+                socket.emit('team-choice', {
+                    actionType: actionType,
+                    targetId: selectedTarget
+                });
+            } else {
+                // Acțiune solo, trimite direct
+                socket.emit('night-action', {
+                    actionType: actionType,
+                    targetId: selectedTarget
+                });
+                
+                // Afișează mesaj de confirmare
+                container.parentElement.innerHTML = `
+                    <div class="action-info">
+                        <h2>✅ Acțiune Confirmată</h2>
+                        <p class="instruction">Așteaptă ca ceilalți jucători să își facă alegerile...</p>
+                        <div class="waiting-spinner">⏳</div>
+                    </div>
+                `;
+            }
         }
     });
 }
@@ -555,6 +693,26 @@ function showDetectiveResult(data) {
 
 // ====== FAZA DE ZI ======
 function startDayPhase(data) {
+    // Narrator rămâne pe ecranul său de monitoring
+    if (myRole === 'NARRATOR') {
+        // Actualizează lista de jucători în viu în ecranul narratorului
+        const playersList = document.getElementById('narrator-players-list');
+        if (playersList) {
+            playersList.innerHTML = '';
+            allRoles.forEach(player => {
+                const roleInfo = ROLES[player.role] || { icon: '❓', name: player.role };
+                const playerItem = document.createElement('div');
+                playerItem.className = `narrator-player-item ${player.alive ? 'alive' : 'dead'}`;
+                playerItem.innerHTML = `
+                    <span class="player-name">${player.alive ? '✅' : '💀'} ${player.name}</span>
+                    <span class="player-role ${ROLES[player.role]?.class || ''}">${roleInfo.icon} ${roleInfo.name}</span>
+                `;
+                playersList.appendChild(playerItem);
+            });
+        }
+        return; // Narrator nu participă la votare
+    }
+    
     switchScreen('day-screen');
     document.getElementById('day-round').textContent = data.round;
     
@@ -683,11 +841,25 @@ function showGameEnd(data) {
 }
 
 // ====== MAFIA CHAT ======
-// Afișează chat pentru un rol (mafia, doctor, detective)
+// Ascunde toate chat-urile la început
+function hideAllChats() {
+    ['mafia', 'doctor', 'detective'].forEach(role => {
+        const chatPanel = document.getElementById(`${role}-chat-panel`);
+        if (chatPanel) {
+            chatPanel.classList.add('hidden');
+        }
+    });
+}
+
+// Afișează chat DOAR pentru rolul tău
 function showRoleChat(role, team) {
     const chatPanel = document.getElementById(`${role}-chat-panel`);
     if (!chatPanel) return;
     
+    // Ascunde toate celelalte chat-uri
+    hideAllChats();
+    
+    // Arată doar chat-ul tău
     chatPanel.classList.remove('hidden');
     
     // Populează membri echipei
@@ -761,6 +933,26 @@ function displayRoleMessage(role, message) {
             narratorMessages.scrollTop = narratorMessages.scrollHeight;
         }
     }
+}
+
+// Actualizează statusul consensului echipei
+function updateConsensusStatus(data) {
+    const statusDiv = document.getElementById('team-consensus-status');
+    if (!statusDiv) return;
+    
+    const { choicesMade, totalMembers, allAgree, targetName } = data;
+    
+    let statusHTML = `<p>📊 Alegeri făcute: ${choicesMade}/${totalMembers}</p>`;
+    
+    if (choicesMade > 0) {
+        if (allAgree) {
+            statusHTML += `<p class="consensus-agree">✅ Toți membrii au ales: <strong>${targetName}</strong></p>`;
+        } else {
+            statusHTML += `<p class="consensus-disagree">❌ Membrii echipei au ales ținte diferite!</p>`;
+        }
+    }
+    
+    statusDiv.innerHTML = statusHTML;
 }
 
 // ====== UTILITĂȚI ======

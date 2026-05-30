@@ -336,6 +336,29 @@ body {
     margin-bottom: 15px;
 }
 
+/* Team Consensus Status */
+.consensus-status {
+    margin: 20px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    font-size: 1.1rem;
+}
+
+.consensus-status p {
+    margin: 8px 0;
+}
+
+.consensus-agree {
+    color: var(--doctor-color);
+    font-weight: bold;
+}
+
+.consensus-disagree {
+    color: var(--mafia-color);
+    font-weight: bold;
+}
+
 .players-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -810,35 +833,42 @@ body {
 .role-chat-panel {
     position: fixed;
     bottom: 20px;
-    width: 350px;
+    width: 340px;
+    max-width: 90vw;
     background: var(--bg-card);
     border-radius: 15px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     z-index: 1000;
-    transition: transform 0.3s ease;
+    transition: all 0.3s ease;
 }
 
-/* Poziționare diferită pentru fiecare panel */
-.mafia-chat-panel {
+/* Poziționare centru-dreapta pentru orice chat afișat */
+.mafia-chat-panel,
+.doctor-chat-panel,
+.detective-chat-panel {
     right: 20px;
+}
+
+/* Culori border specifice */
+.mafia-chat-panel {
     border: 2px solid var(--mafia-color);
-    box-shadow: 0 10px 40px rgba(255, 51, 51, 0.3);
+    box-shadow: 0 10px 40px rgba(255, 51, 51, 0.4);
 }
 
 .doctor-chat-panel {
-    right: 390px; /* Offset pentru a nu se suprapună */
     border: 2px solid var(--doctor-color);
-    box-shadow: 0 10px 40px rgba(51, 255, 153, 0.3);
+    box-shadow: 0 10px 40px rgba(51, 255, 153, 0.4);
 }
 
 .detective-chat-panel {
-    right: 760px; /* Offset pentru a nu se suprapună */
     border: 2px solid var(--detective-color);
-    box-shadow: 0 10px 40px rgba(51, 153, 255, 0.3);
+    box-shadow: 0 10px 40px rgba(51, 153, 255, 0.4);
 }
 
 .role-chat-panel.hidden {
-    transform: translateX(400px);
+    transform: translateY(500px);
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Headers specifice */

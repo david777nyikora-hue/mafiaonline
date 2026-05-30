@@ -95,6 +95,7 @@ io.on('connection', (socket) => {
                     detectiveCount: data.roleConfig.detectiveCount || 1
                 },
                 nightActions: {},
+                teamChoices: {}, // { actionType: { playerId: targetId } }
                 votes: {},
                 alivePlayers: [],
                 deadPlayers: [],
@@ -235,18 +236,114 @@ io.on('connection', (socket) => {
         }
     });
     
-    // NIGHT ACTIONS
-    socket.on('night-action', (data) => {
+    // TEAM CHOICE - Pentru echipe cu 2+ membri
+    socket.on('team-choice', (data) => {
         const roomCode = socket.roomCode;
         const room = gameRooms.get(roomCode);
         
         if (!room) return;
         
         const { actionType, targetId } = data;
+        const player = room.players.find(p => p.id === socket.id);
+        
+        if (!player) return;
+        
+        // Inițializează teamChoices pentru acest actionType dacă nu există
+        if (!room.gameState.teamChoices[actionType]) {
+            room.gameState.teamChoices[actionType] = {};
+        }
+        
+        // Salvează alegerea jucătorului
+        room.gameState.teamChoices[actionType][socket.id] = targetId;
+        
+        // Găsește toți membrii echipei vii
+        let teamMembers = [];
+        if (actionType === 'mafia') {
+            teamMembers = room.gameState.alivePlayers.filter(p => p.role === 'MAFIA');
+        } else if (actionType === 'doctor') {
+            teamMembers = room.gameState.alivePlayers.filter(p => p.role === 'DOCTOR');
+        } else if (actionType === 'detective') {
+            teamMembers = room.gameState.alivePlayers.filter(p => p.role === 'DETECTIVE');
+        }
+        
+        const choices = room.gameState.teamChoices[actionType];
+        const choicesMade = Object.keys(choices).length;
+        const totalMembers = teamMembers.length;
+        
+        // Verifică dacă toți membrii au ales aceeași țintă
+        const targetIds = Object.values(choices);
+        const allAgree = targetIds.every(id => id === targetIds[0]);
+        
+        // Trimite update la toți membrii echipei
+        const targetPlayer = room.players.find(p => p.id === targetIds[0]);
+        const updateData = {
+            choicesMade: choicesMade,
+            totalMembers: totalMembers,
+            allAgree: allAgree,
+            targetName: targetPlayer ? targetPlayer.name : 'Necunoscut'
+        };
+        
+        teamMembers.forEach(member => {
+            io.to(member.id).emit('team-consensus-update', updateData);
+        });
+        
+        // Dacă toți au ales și sunt de acord
+        if (choicesMade === totalMembers && allAgree) {
+            // Salvează acțiunea finală
+            room.gameState.nightActions[actionType] = targetIds[0];
+            
+            // Notifică echipa despre consens
+            teamMembers.forEach(member => {
+                io.to(member.id).emit('team-consensus-achieved', {
+                    targetName: targetPlayer.name
+                });
+            });
+            
+            // Reset team choices pentru acest actionType
+            room.gameState.teamChoices[actionType] = {};
+            
+            // Verifică dacă toate acțiunile sunt complete
+            checkNightActionsComplete(roomCode);
+        } else if (choicesMade === totalMembers && !allAgree) {
+            // Toți au ales dar nu sunt de acord - resetează
+            room.gameState.teamChoices[actionType] = {};
+            
+            teamMembers.forEach(member => {
+                io.to(member.id).emit('team-consensus-failed', {
+                    message: 'Membrii echipei au ales ținte diferite! Alegeți din nou.'
+                });
+            });
+        }
+    });
+    
+    // NIGHT ACTIONS (pentru acțiuni solo)
+    socket.on('night-action', (data) => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room) return;
+        
+        const player = room.players.find(p => p.id === socket.id);
+        
+        // Narrator nu poate face acțiuni
+        if (!player || player.role === 'NARRATOR') {
+            return;
+        }
+        
+        const { actionType, targetId } = data;
         room.gameState.nightActions[actionType] = targetId;
         
         // Confirmă acțiunea
         socket.emit('action-confirmed', { actionType });
+        
+        // Trimite update la narrator
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('narrator-action-update', {
+                actions: room.gameState.nightActions,
+                players: room.players
+            });
+        }
         
         // Verifică dacă toți au acționat
         checkNightActionsComplete(roomCode);
@@ -259,6 +356,13 @@ io.on('connection', (socket) => {
         
         if (!room) return;
         
+        const player = room.players.find(p => p.id === socket.id);
+        
+        // Narrator nu poate vota
+        if (!player || player.role === 'NARRATOR') {
+            return;
+        }
+        
         const { targetId } = data;
         room.gameState.votes[socket.id] = targetId;
         
@@ -268,7 +372,16 @@ io.on('connection', (socket) => {
             targetId: targetId
         });
         
-        // Verifică dacă toți au votat
+        // Trimite update la narrator
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('narrator-vote-update', {
+                votes: room.gameState.votes,
+                players: room.players
+            });
+        }
+        
+        // Verifică dacă toți au votat (exclude narrator)
         const aliveCount = room.gameState.alivePlayers.length;
         const voteCount = Object.keys(room.gameState.votes).length;
         
@@ -336,6 +449,7 @@ io.on('connection', (socket) => {
         room.gameState.phase = 'lobby';
         room.gameState.round = 1;
         room.gameState.nightActions = {};
+        room.gameState.teamChoices = {};
         room.gameState.votes = {};
         room.gameState.alivePlayers = [];
         room.gameState.deadPlayers = [];
@@ -426,6 +540,7 @@ function startNightPhase(roomCode) {
     
     room.gameState.phase = 'night';
     room.gameState.nightActions = {};
+    room.gameState.teamChoices = {}; // Reset team consensus pentru rundă nouă
     
     console.log(`🌙 Noapte începută în ${roomCode} - Runda ${room.gameState.round}`);
     
