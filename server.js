@@ -29,10 +29,16 @@ function generateRoomCode() {
 }
 
 // Funcție pentru distribuirea rolurilor
-function assignRoles(players, mafiaCount) {
-    const doctorCount = 1;
-    const detectiveCount = 1;
-    const citizenCount = players.length - mafiaCount - doctorCount - detectiveCount;
+function assignRoles(players, roleConfig) {
+    // Host-ul nu primește rol - e povestitor
+    const playersWithoutHost = players.filter(p => !p.isHost);
+    
+    const { mafiaCount, doctorCount, detectiveCount } = roleConfig;
+    const citizenCount = playersWithoutHost.length - mafiaCount - doctorCount - detectiveCount;
+    
+    if (citizenCount < 0) {
+        throw new Error('Prea multe roluri speciale pentru numărul de jucători!');
+    }
     
     let roles = [
         ...Array(mafiaCount).fill('MAFIA'),
@@ -41,17 +47,28 @@ function assignRoles(players, mafiaCount) {
         ...Array(citizenCount).fill('CITIZEN')
     ];
     
-    // Shuffle roluri
+    // Shuffle roluri (Fisher-Yates)
     for (let i = roles.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [roles[i], roles[j]] = [roles[j], roles[i]];
     }
     
-    return players.map((player, index) => ({
-        ...player,
-        role: roles[index],
-        alive: true
-    }));
+    // Distribuie roluri
+    let roleIndex = 0;
+    return players.map(player => {
+        if (player.isHost) {
+            return {
+                ...player,
+                role: 'NARRATOR', // Host = Povestitor
+                alive: false // Nu participă în joc
+            };
+        }
+        return {
+            ...player,
+            role: roles[roleIndex++],
+            alive: true
+        };
+    });
 }
 
 // Socket.IO
@@ -72,11 +89,16 @@ io.on('connection', (socket) => {
             gameState: {
                 phase: 'lobby',
                 round: 1,
-                mafiaCount: data.mafiaCount || 2,
+                roleConfig: {
+                    mafiaCount: data.roleConfig.mafiaCount || 2,
+                    doctorCount: data.roleConfig.doctorCount || 1,
+                    detectiveCount: data.roleConfig.detectiveCount || 1
+                },
                 nightActions: {},
                 votes: {},
                 alivePlayers: [],
-                deadPlayers: []
+                deadPlayers: [],
+                mafiaChat: [] // Istoric chat Mafia
             },
             started: false
         };
@@ -143,35 +165,64 @@ io.on('connection', (socket) => {
             return;
         }
         
-        if (room.players.length < 4) {
-            socket.emit('error', { message: 'Minim 4 jucători necesari!' });
+        const playersWithoutHost = room.players.filter(p => !p.isHost);
+        if (playersWithoutHost.length < 4) {
+            socket.emit('error', { message: 'Minim 4 jucători necesari (fără host)!' });
             return;
         }
         
         // Distribuie roluri
-        room.players = assignRoles(room.players, room.gameState.mafiaCount);
-        room.gameState.alivePlayers = [...room.players];
-        room.started = true;
-        room.gameState.phase = 'role-reveal';
-        
-        console.log(`🎬 Jocul a început în camera ${roomCode}`);
-        
-        // Trimite fiecărui jucător rolul său
-        room.players.forEach(player => {
-            io.to(player.id).emit('game-started', {
-                role: player.role,
-                players: room.players.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    alive: p.alive
-                }))
+        try {
+            room.players = assignRoles(room.players, room.gameState.roleConfig);
+            room.gameState.alivePlayers = room.players.filter(p => p.alive);
+            room.started = true;
+            room.gameState.phase = 'role-reveal';
+            
+            console.log(`🎬 Jocul a început în camera ${roomCode}`);
+            
+            // Identifică membrii Mafia pentru ca să se știe între ei
+            const mafiaPlayers = room.players.filter(p => p.role === 'MAFIA');
+            const mafiaList = mafiaPlayers.map(p => ({
+                id: p.id,
+                name: p.name
+            }));
+            
+            // Trimite fiecărui jucător rolul său
+            room.players.forEach(player => {
+                const payload = {
+                    role: player.role,
+                    players: room.players.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        alive: p.alive
+                    }))
+                };
+                
+                // Dacă e Mafia, trimite și lista cu ceilalți Mafia
+                if (player.role === 'MAFIA') {
+                    payload.mafiaTeam = mafiaList;
+                }
+                
+                // Dacă e Narrator (host), trimite toate rolurile
+                if (player.role === 'NARRATOR') {
+                    payload.allRoles = room.players.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        role: p.role,
+                        alive: p.alive
+                    }));
+                }
+                
+                io.to(player.id).emit('game-started', payload);
             });
-        });
-        
-        // După 5 secunde, începe noaptea
-        setTimeout(() => {
-            startNightPhase(roomCode);
-        }, 5000);
+            
+            // După 5 secunde, începe noaptea
+            setTimeout(() => {
+                startNightPhase(roomCode);
+            }, 5000);
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
     });
     
     // NIGHT ACTIONS
@@ -214,6 +265,43 @@ io.on('connection', (socket) => {
         if (voteCount === aliveCount) {
             processVotes(roomCode);
         }
+    });
+    
+    // MAFIA CHAT - Trimite mesaj
+    socket.on('mafia-chat-message', (data) => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room) return;
+        
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player || player.role !== 'MAFIA') {
+            return; // Doar Mafia poate trimite mesaje
+        }
+        
+        const message = {
+            sender: player.name,
+            senderId: player.id,
+            text: data.message,
+            timestamp: Date.now()
+        };
+        
+        // Salvează în istoric
+        room.gameState.mafiaChat.push(message);
+        
+        // Trimite la toți membrii Mafia
+        const mafiaMembers = room.players.filter(p => p.role === 'MAFIA');
+        mafiaMembers.forEach(member => {
+            io.to(member.id).emit('mafia-chat-message', message);
+        });
+        
+        // Trimite și la Narrator (host) pentru monitorizare
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('mafia-chat-message', message);
+        }
+        
+        console.log(`💬 Mafia chat în ${roomCode}: ${player.name}: ${data.message}`);
     });
     
     // Disconnect

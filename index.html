@@ -26,19 +26,40 @@
         <!-- ECRAN CREARE CAMERĂ -->
         <div id="create-room-screen" class="screen">
             <div class="setup-section">
-                <h2>Creează Cameră Nouă</h2>
+                <h2>Creează Cameră Nouă (Vei fi Povestitor)</h2>
                 
                 <div class="input-group">
                     <label for="host-name">Numele tău:</label>
                     <input type="text" id="host-name" placeholder="Introdu numele tău">
                 </div>
                 
-                <div class="input-group">
-                    <label for="host-mafia-count">Număr mafioți:</label>
-                    <input type="number" id="host-mafia-count" min="1" max="5" value="2">
+                <p class="host-info">🎭 Ca host, vei fi POVESTITOR - vei vedea toate rolurile dar nu vei juca!</p>
+                
+                <div class="role-selection">
+                    <h3>Configurează Rolurile:</h3>
+                    
+                    <div class="input-group">
+                        <label for="host-mafia-count">🔫 Număr Mafioți:</label>
+                        <input type="number" id="host-mafia-count" min="1" max="5" value="2">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="host-doctor-count">💊 Număr Doctori:</label>
+                        <input type="number" id="host-doctor-count" min="0" max="3" value="1">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="host-detective-count">🔍 Număr Detectivi:</label>
+                        <input type="number" id="host-detective-count" min="0" max="3" value="1">
+                    </div>
+                    
+                    <div class="roles-total">
+                        <p><strong>Total roluri speciale:</strong> <span id="total-special-roles">4</span></p>
+                        <p class="instruction">Restul jucătorilor vor fi Cetățeni</p>
+                    </div>
                 </div>
                 
-                <button id="confirm-create-btn" class="btn btn-primary">Creează Cameră</button>
+                <button id="confirm-create-btn" class="btn btn-primary">Creează Cameră ca Povestitor</button>
                 <button id="back-to-menu-btn" class="btn btn-secondary">Înapoi</button>
             </div>
         </div>
@@ -161,6 +182,75 @@
                 </div>
 
                 <button id="play-again-btn" class="btn btn-primary">Joacă Din Nou</button>
+            </div>
+        </div>
+
+        <!-- ECRAN POVESTITOR (HOST) -->
+        <div id="narrator-screen" class="screen">
+            <div class="narrator-container">
+                <div class="narrator-header">
+                    <h1>🎭 POVESTITOR</h1>
+                    <p class="subtitle">Moderezi jocul - vezi tot dar nu joci!</p>
+                    <p class="round-counter">Runda <span id="narrator-round">1</span> - Fază: <span id="narrator-phase">Lobby</span></p>
+                </div>
+
+                <div class="narrator-content">
+                    <!-- Lista jucători cu roluri -->
+                    <div class="narrator-players-section">
+                        <h2>📋 Jucători și Roluri</h2>
+                        <div id="narrator-players-list" class="narrator-players-list">
+                            <!-- Populate dinamically -->
+                        </div>
+                    </div>
+
+                    <!-- Chat Mafia (vizibil pentru povestitor) -->
+                    <div class="narrator-mafia-chat">
+                        <h2>🔫 Chat Mafia (Monitorizare)</h2>
+                        <div id="narrator-mafia-messages" class="chat-messages">
+                            <!-- Mesaje chat Mafia -->
+                        </div>
+                    </div>
+
+                    <!-- Acțiuni noapte -->
+                    <div class="narrator-night-actions">
+                        <h2>🌙 Acțiuni Noapte</h2>
+                        <div id="narrator-actions-list">
+                            <!-- Acțiuni curente -->
+                        </div>
+                    </div>
+
+                    <!-- Voturi zi -->
+                    <div class="narrator-day-votes">
+                        <h2>☀️ Voturi Zi</h2>
+                        <div id="narrator-votes-list">
+                            <!-- Voturi curente -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="narrator-controls">
+                    <button id="narrator-end-game-btn" class="btn btn-danger">Încheie Jocul</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT MAFIA (Pentru jucătorii Mafia) -->
+        <div id="mafia-chat-panel" class="mafia-chat-panel hidden">
+            <div class="mafia-chat-header">
+                <h3>🔫 Chat Mafia Secret</h3>
+                <button id="toggle-mafia-chat-btn" class="btn-small">📩</button>
+            </div>
+            <div class="mafia-chat-content">
+                <div id="mafia-chat-members" class="mafia-members">
+                    <!-- Lista membri Mafia -->
+                </div>
+                <div id="mafia-messages" class="chat-messages">
+                    <!-- Mesaje -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="mafia-chat-input" placeholder="Mesaj secret..." maxlength="200">
+                    <button id="send-mafia-message-btn" class="btn btn-primary">Trimite</button>
+                </div>
             </div>
         </div>
 

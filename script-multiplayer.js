@@ -27,6 +27,12 @@ const ROLES = {
         icon: '👤',
         description: 'Nu ai abilități speciale. Ajută orașul să găsească Mafia prin vot.',
         class: 'citizen'
+    },
+    NARRATOR: {
+        name: 'Povestitor',
+        icon: '🎭',
+        description: 'Moderezi jocul. Vezi toate rolurile dar nu participi activ.',
+        class: 'narrator'
     }
 };
 
@@ -36,6 +42,9 @@ let myId = null;
 let roomCode = null;
 let isHost = false;
 let currentPlayers = [];
+let mafiaTeam = []; // Lista membrilor Mafia (dacă ești Mafia)
+let allRoles = []; // Toate rolurile (dacă ești Narrator)
+let isMafiaChatOpen = false;
 
 // ====== INIȚIALIZARE ======
 document.addEventListener('DOMContentLoaded', () => {
@@ -52,12 +61,57 @@ function initializeEventListeners() {
     document.getElementById('back-to-menu-btn').addEventListener('click', () => switchScreen('main-menu-screen'));
     document.getElementById('back-to-menu-btn-2').addEventListener('click', () => switchScreen('main-menu-screen'));
     
+    // Role count update
+    const roleInputs = ['host-mafia-count', 'host-doctor-count', 'host-detective-count'];
+    roleInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', updateTotalRoles);
+        }
+    });
+    
     // Create room
     document.getElementById('confirm-create-btn').addEventListener('click', createRoom);
     
     // Join room
     document.getElementById('confirm-join-btn').addEventListener('click', joinRoom);
     document.getElementById('room-code').addEventListener('input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
+    });
+    
+    // Lobby
+    document.getElementById('start-game-lobby-btn').addEventListener('click', startGame);
+    document.getElementById('leave-lobby-btn').addEventListener('click', () => location.reload());
+    
+    // Mafia chat
+    const sendMafiaBtn = document.getElementById('send-mafia-message-btn');
+    const mafiaInput = document.getElementById('mafia-chat-input');
+    const toggleChatBtn = document.getElementById('toggle-mafia-chat-btn');
+    
+    if (sendMafiaBtn) {
+        sendMafiaBtn.addEventListener('click', sendMafiaMessage);
+    }
+    if (mafiaInput) {
+        mafiaInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMafiaMessage();
+        });
+    }
+    if (toggleChatBtn) {
+        toggleChatBtn.addEventListener('click', toggleMafiaChat);
+    }
+    
+    // Joc din nou
+    document.getElementById('play-again-btn').addEventListener('click', () => location.reload());
+}
+
+// Update total roles count
+function updateTotalRoles() {
+    const mafia = parseInt(document.getElementById('host-mafia-count').value) || 0;
+    const doctor = parseInt(document.getElementById('host-doctor-count').value) || 0;
+    const detective = parseInt(document.getElementById('host-detective-count').value) || 0;
+    const total = mafia + doctor + detective;
+    document.getElementById('total-special-roles').textContent = total;
+}
         e.target.value = e.target.value.toUpperCase();
     });
     
@@ -100,6 +154,17 @@ function setupSocketListeners() {
     socket.on('game-started', (data) => {
         myRole = data.role;
         currentPlayers = data.players;
+        
+        // Dacă ești Mafia, primești lista echipei
+        if (data.mafiaTeam) {
+            mafiaTeam = data.mafiaTeam;
+        }
+        
+        // Dacă ești Narrator, primești toate rolurile
+        if (data.allRoles) {
+            allRoles = data.allRoles;
+        }
+        
         showMyRole();
     });
     
@@ -136,13 +201,18 @@ function setupSocketListeners() {
     // Erori
     socket.on('error', (data) => {
         showNotification(data.message, 'error');
-    });
-}
+    });    
+    // Mafia chat message
+    socket.on('mafia-chat-message', (message) => {
+        displayMafiaMessage(message);
+    });}
 
 // ====== FUNCȚII CAMERĂ ======
 function createRoom() {
     const playerName = document.getElementById('host-name').value.trim();
     const mafiaCount = parseInt(document.getElementById('host-mafia-count').value);
+    const doctorCount = parseInt(document.getElementById('host-doctor-count').value);
+    const detectiveCount = parseInt(document.getElementById('host-detective-count').value);
     
     if (!playerName) {
         showNotification('Introdu un nume!', 'error');
@@ -151,7 +221,11 @@ function createRoom() {
     
     socket.emit('create-room', {
         playerName: playerName,
-        mafiaCount: mafiaCount
+        roleConfig: {
+            mafiaCount: mafiaCount,
+            doctorCount: doctorCount,
+            detectiveCount: detectiveCount
+        }
     });
 }
 
@@ -208,6 +282,12 @@ function startGame() {
 
 // ====== AFIȘARE ROL ======
 function showMyRole() {
+    // Dacă ești Narrator (host), arată ecranul special
+    if (myRole === 'NARRATOR') {
+        showNarratorScreen();
+        return;
+    }
+    
     const roleInfo = ROLES[myRole];
     
     switchScreen('my-role-screen');
@@ -218,6 +298,54 @@ function showMyRole() {
     document.getElementById('my-role-icon').textContent = roleInfo.icon;
     document.getElementById('my-role-name').textContent = roleInfo.name;
     document.getElementById('my-role-description').textContent = roleInfo.description;
+    
+    // Dacă ești Mafia, arată echipa ta
+    if (myRole === 'MAFIA' && mafiaTeam.length > 0) {
+        const teamInfo = document.createElement('div');
+        teamInfo.className = 'mafia-team-info';
+        teamInfo.innerHTML = `
+            <h3>🤝 Echipa Ta Mafia:</h3>
+            <ul>
+                ${mafiaTeam.map(member => `<li>${member.name}</li>`).join('')}
+            </ul>
+            <p class="instruction">💬 Folosește chat-ul secret pentru a coordona acțiunile!</p>
+        `;
+        roleCard.appendChild(teamInfo);
+        
+        // Activează chat-ul Mafia
+        showMafiaChat();
+    }
+}
+
+// ====== ECRAN NARRATOR (HOST) ======
+function showNarratorScreen() {
+    switchScreen('narrator-screen');
+    
+    // Populează lista de jucători cu roluri
+    const playersList = document.getElementById('narrator-players-list');
+    playersList.innerHTML = '';
+    
+    allRoles.forEach(player => {
+        const roleInfo = ROLES[player.role] || { icon: '❓', name: player.role };
+        const playerItem = document.createElement('div');
+        playerItem.className = `narrator-player-item ${player.alive ? 'alive' : 'dead'}`;
+        playerItem.innerHTML = `
+            <span class="player-name">${player.alive ? '✅' : '💀'} ${player.name}</span>
+            <span class="player-role ${ROLES[player.role]?.class || ''}">${roleInfo.icon} ${roleInfo.name}</span>
+        `;
+        playersList.appendChild(playerItem);
+    });
+    
+    // Setup chat Mafia pentru monitoring
+    const mafiaMessages = document.getElementById('narrator-mafia-messages');
+    mafiaMessages.innerHTML = '<p class="instruction">📡 Monitorizezi chat-ul Mafia...</p>';
+    
+    // Setup event listener pentru end game
+    document.getElementById('narrator-end-game-btn').addEventListener('click', () => {
+        if (confirm('Sigur vrei să închei jocul?')) {
+            location.reload();
+        }
+    });
 }
 
 // ====== FAZA DE NOAPTE ======
@@ -474,6 +602,68 @@ function showGameEnd(data) {
         
         finalList.appendChild(item);
     });
+}
+
+// ====== MAFIA CHAT ======
+function showMafiaChat() {
+    const chatPanel = document.getElementById('mafia-chat-panel');
+    chatPanel.classList.remove('hidden');
+    
+    // Populează membri Mafia
+    const membersDiv = document.getElementById('mafia-chat-members');
+    membersDiv.innerHTML = '<h4>Membrii echipei:</h4>' + 
+        mafiaTeam.map(member => `<span class="mafia-member">🔫 ${member.name}</span>`).join('');
+}
+
+function toggleMafiaChat() {
+    const chatPanel = document.getElementById('mafia-chat-panel');
+    const content = chatPanel.querySelector('.mafia-chat-content');
+    
+    if (isMafiaChatOpen) {
+        content.style.display = 'none';
+        isMafiaChatOpen = false;
+    } else {
+        content.style.display = 'block';
+        isMafiaChatOpen = true;
+    }
+}
+
+function sendMafiaMessage() {
+    const input = document.getElementById('mafia-chat-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    socket.emit('mafia-chat-message', { message });
+    input.value = '';
+}
+
+function displayMafiaMessage(message) {
+    // Afișează în chat-ul Mafia pentru jucători
+    const mafiaMessages = document.getElementById('mafia-messages');
+    if (mafiaMessages) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.innerHTML = `
+            <strong>${message.sender}:</strong> ${message.text}
+            <span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>
+        `;
+        mafiaMessages.appendChild(messageDiv);
+        mafiaMessages.scrollTop = mafiaMessages.scrollHeight;
+    }
+    
+    // Afișează în ecranul narratorului pentru monitoring
+    const narratorMessages = document.getElementById('narrator-mafia-messages');
+    if (narratorMessages && myRole === 'NARRATOR') {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.innerHTML = `
+            <strong>${message.sender}:</strong> ${message.text}
+            <span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>
+        `;
+        narratorMessages.appendChild(messageDiv);
+        narratorMessages.scrollTop = narratorMessages.scrollHeight;
+    }
 }
 
 // ====== UTILITĂȚI ======
