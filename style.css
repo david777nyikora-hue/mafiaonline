@@ -759,24 +759,89 @@ body {
     border-radius: 5px;
 }
 
-/* ====== MAFIA CHAT PANEL ====== */
-.mafia-chat-panel {
+/* Stiluri generice pentru team info */
+.doctor-team-info {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(51, 255, 153, 0.1);
+    border: 2px solid var(--doctor-color);
+    border-radius: 10px;
+}
+
+.doctor-team-info h3 {
+    color: var(--doctor-color);
+    margin-bottom: 15px;
+}
+
+.detective-team-info {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(51, 153, 255, 0.1);
+    border: 2px solid var(--detective-color);
+    border-radius: 10px;
+}
+
+.detective-team-info h3 {
+    color: var(--detective-color);
+    margin-bottom: 15px;
+}
+
+.doctor-team-info ul,
+.detective-team-info ul {
+    list-style: none;
+    padding: 0;
+}
+
+.doctor-team-info li {
+    padding: 8px;
+    background: rgba(51, 255, 153, 0.2);
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+.detective-team-info li {
+    padding: 8px;
+    background: rgba(51, 153, 255, 0.2);
+    margin: 5px 0;
+    border-radius: 5px;
+}
+
+/* ====== ROLE CHAT PANELS (MAFIA, DOCTOR, DETECTIVE) ====== */
+.role-chat-panel {
     position: fixed;
     bottom: 20px;
-    right: 20px;
     width: 350px;
     background: var(--bg-card);
-    border: 2px solid var(--mafia-color);
     border-radius: 15px;
-    box-shadow: 0 10px 40px rgba(255, 51, 51, 0.3);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     z-index: 1000;
     transition: transform 0.3s ease;
 }
 
-.mafia-chat-panel.hidden {
+/* Poziționare diferită pentru fiecare panel */
+.mafia-chat-panel {
+    right: 20px;
+    border: 2px solid var(--mafia-color);
+    box-shadow: 0 10px 40px rgba(255, 51, 51, 0.3);
+}
+
+.doctor-chat-panel {
+    right: 390px; /* Offset pentru a nu se suprapună */
+    border: 2px solid var(--doctor-color);
+    box-shadow: 0 10px 40px rgba(51, 255, 153, 0.3);
+}
+
+.detective-chat-panel {
+    right: 760px; /* Offset pentru a nu se suprapună */
+    border: 2px solid var(--detective-color);
+    box-shadow: 0 10px 40px rgba(51, 153, 255, 0.3);
+}
+
+.role-chat-panel.hidden {
     transform: translateX(400px);
 }
 
+/* Headers specifice */
 .mafia-chat-header {
     background: var(--mafia-color);
     padding: 15px;
@@ -786,7 +851,25 @@ body {
     align-items: center;
 }
 
-.mafia-chat-header h3 {
+.doctor-chat-header {
+    background: var(--doctor-color);
+    padding: 15px;
+    border-radius: 15px 15px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.detective-chat-header {
+    background: var(--detective-color);
+    padding: 15px;
+    border-radius: 15px 15px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.role-chat-header h3 {
     margin: 0;
     font-size: 1rem;
 }
@@ -800,19 +883,19 @@ body {
     font-size: 1.2rem;
 }
 
-.mafia-chat-content {
+.role-chat-content {
     padding: 15px;
     max-height: 400px;
     overflow-y: auto;
 }
 
-.mafia-members {
+.role-members {
     margin-bottom: 15px;
     padding-bottom: 15px;
-    border-bottom: 1px solid rgba(255, 51, 51, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.mafia-members h4 {
+.role-members h4 {
     font-size: 0.9rem;
     color: var(--text-secondary);
     margin-bottom: 10px;
@@ -822,6 +905,24 @@ body {
     display: inline-block;
     padding: 5px 10px;
     background: rgba(255, 51, 51, 0.2);
+    border-radius: 5px;
+    margin: 3px;
+    font-size: 0.85rem;
+}
+
+.doctor-member {
+    display: inline-block;
+    padding: 5px 10px;
+    background: rgba(51, 255, 153, 0.2);
+    border-radius: 5px;
+    margin: 3px;
+    font-size: 0.85rem;
+}
+
+.detective-member {
+    display: inline-block;
+    padding: 5px 10px;
+    background: rgba(51, 153, 255, 0.2);
     border-radius: 5px;
     margin: 3px;
     font-size: 0.85rem;
@@ -904,7 +1005,7 @@ body {
 }
 
 .narrator-players-section,
-.narrator-mafia-chat,
+.narrator-role-chat,
 .narrator-night-actions,
 .narrator-day-votes {
     background: rgba(255, 255, 255, 0.05);
@@ -913,7 +1014,7 @@ body {
 }
 
 .narrator-players-section h2,
-.narrator-mafia-chat h2,
+.narrator-role-chat h2,
 .narrator-night-actions h2,
 .narrator-day-votes h2 {
     font-size: 1.2rem;

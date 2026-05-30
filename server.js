@@ -180,12 +180,14 @@ io.on('connection', (socket) => {
             
             console.log(`🎬 Jocul a început în camera ${roomCode}`);
             
-            // Identifică membrii Mafia pentru ca să se știe între ei
+            // Identifică membrii fiecărei echipe pentru coordonare
             const mafiaPlayers = room.players.filter(p => p.role === 'MAFIA');
-            const mafiaList = mafiaPlayers.map(p => ({
-                id: p.id,
-                name: p.name
-            }));
+            const doctorPlayers = room.players.filter(p => p.role === 'DOCTOR');
+            const detectivePlayers = room.players.filter(p => p.role === 'DETECTIVE');
+            
+            const mafiaList = mafiaPlayers.map(p => ({ id: p.id, name: p.name }));
+            const doctorList = doctorPlayers.map(p => ({ id: p.id, name: p.name }));
+            const detectiveList = detectivePlayers.map(p => ({ id: p.id, name: p.name }));
             
             // Trimite fiecărui jucător rolul său
             room.players.forEach(player => {
@@ -198,9 +200,17 @@ io.on('connection', (socket) => {
                     }))
                 };
                 
-                // Dacă e Mafia, trimite și lista cu ceilalți Mafia
-                if (player.role === 'MAFIA') {
+                // Trimite lista echipei DOAR dacă sunt 2+ membri
+                if (player.role === 'MAFIA' && mafiaList.length >= 2) {
                     payload.mafiaTeam = mafiaList;
+                }
+                
+                if (player.role === 'DOCTOR' && doctorList.length >= 2) {
+                    payload.doctorTeam = doctorList;
+                }
+                
+                if (player.role === 'DETECTIVE' && detectiveList.length >= 2) {
+                    payload.detectiveTeam = detectiveList;
                 }
                 
                 // Dacă e Narrator (host), trimite toate rolurile
@@ -304,6 +314,48 @@ io.on('connection', (socket) => {
         console.log(`💬 Mafia chat în ${roomCode}: ${player.name}: ${data.message}`);
     });
     
+    // DOCTOR CHAT - Trimite mesaj
+    socket.on('doctor-chat-message', (data) => {
+        handleRoleChat(socket, data, 'DOCTOR', 'doctor');
+    });
+    
+    // DETECTIVE CHAT - Trimite mesaj
+    socket.on('detective-chat-message', (data) => {
+        handleRoleChat(socket, data, 'DETECTIVE', 'detective');
+    });
+    
+    // RESTART GAME - Resetează jocul păstrând lobby-ul
+    socket.on('restart-game', () => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room) return;
+        
+        // Resetează starea jocului
+        room.started = false;
+        room.gameState.phase = 'lobby';
+        room.gameState.round = 1;
+        room.gameState.nightActions = {};
+        room.gameState.votes = {};
+        room.gameState.alivePlayers = [];
+        room.gameState.deadPlayers = [];
+        room.gameState.mafiaChat = [];
+        
+        // Resetează rolurile jucătorilor
+        room.players = room.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            isHost: p.isHost
+        }));
+        
+        console.log(`🔄 Joc resetat în camera ${roomCode}`);
+        
+        // Notifică toți jucătorii
+        io.to(roomCode).emit('game-restarted', {
+            players: room.players
+        });
+    });
+    
     // Disconnect
     socket.on('disconnect', () => {
         console.log('🔴 Jucător deconectat:', socket.id);
@@ -332,6 +384,40 @@ io.on('connection', (socket) => {
         }
     });
 });
+
+// Handler generic pentru chat-uri de rol (Doctor, Detective)
+function handleRoleChat(socket, data, roleName, roleKey) {
+    const roomCode = socket.roomCode;
+    const room = gameRooms.get(roomCode);
+    
+    if (!room) return;
+    
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || player.role !== roleName) {
+        return; // Doar jucătorii cu rolul respectiv pot trimite mesaje
+    }
+    
+    const message = {
+        sender: player.name,
+        senderId: player.id,
+        text: data.message,
+        timestamp: Date.now()
+    };
+    
+    // Trimite la toți membrii cu același rol
+    const roleMembers = room.players.filter(p => p.role === roleName);
+    roleMembers.forEach(member => {
+        io.to(member.id).emit(`${roleKey}-chat-message`, message);
+    });
+    
+    // Trimite și la Narrator (host) pentru monitorizare
+    const narrator = room.players.find(p => p.role === 'NARRATOR');
+    if (narrator) {
+        io.to(narrator.id).emit(`${roleKey}-chat-message`, message);
+    }
+    
+    console.log(`💬 ${roleName} chat în ${roomCode}: ${player.name}: ${data.message}`);
+}
 
 // Funcție pentru a începe faza de noapte
 function startNightPhase(roomCode) {

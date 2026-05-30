@@ -204,10 +204,26 @@
                     </div>
 
                     <!-- Chat Mafia (vizibil pentru povestitor) -->
-                    <div class="narrator-mafia-chat">
+                    <div class="narrator-role-chat">
                         <h2>🔫 Chat Mafia (Monitorizare)</h2>
                         <div id="narrator-mafia-messages" class="chat-messages">
                             <!-- Mesaje chat Mafia -->
+                        </div>
+                    </div>
+
+                    <!-- Chat Doctor (vizibil pentru povestitor) -->
+                    <div class="narrator-role-chat">
+                        <h2>💊 Chat Doctor (Monitorizare)</h2>
+                        <div id="narrator-doctor-messages" class="chat-messages">
+                            <!-- Mesaje chat Doctor -->
+                        </div>
+                    </div>
+
+                    <!-- Chat Detective (vizibil pentru povestitor) -->
+                    <div class="narrator-role-chat">
+                        <h2>🔍 Chat Detectiv (Monitorizare)</h2>
+                        <div id="narrator-detective-messages" class="chat-messages">
+                            <!-- Mesaje chat Detective -->
                         </div>
                     </div>
 
@@ -235,13 +251,13 @@
         </div>
 
         <!-- CHAT MAFIA (Pentru jucătorii Mafia) -->
-        <div id="mafia-chat-panel" class="mafia-chat-panel hidden">
-            <div class="mafia-chat-header">
+        <div id="mafia-chat-panel" class="role-chat-panel mafia-chat-panel hidden">
+            <div class="role-chat-header mafia-chat-header">
                 <h3>🔫 Chat Mafia Secret</h3>
                 <button id="toggle-mafia-chat-btn" class="btn-small">📩</button>
             </div>
-            <div class="mafia-chat-content">
-                <div id="mafia-chat-members" class="mafia-members">
+            <div class="role-chat-content mafia-chat-content">
+                <div id="mafia-chat-members" class="role-members">
                     <!-- Lista membri Mafia -->
                 </div>
                 <div id="mafia-messages" class="chat-messages">
@@ -250,6 +266,46 @@
                 <div class="chat-input-area">
                     <input type="text" id="mafia-chat-input" placeholder="Mesaj secret..." maxlength="200">
                     <button id="send-mafia-message-btn" class="btn btn-primary">Trimite</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT DOCTOR (Pentru jucătorii Doctor) -->
+        <div id="doctor-chat-panel" class="role-chat-panel doctor-chat-panel hidden">
+            <div class="role-chat-header doctor-chat-header">
+                <h3>💊 Chat Doctor Secret</h3>
+                <button id="toggle-doctor-chat-btn" class="btn-small">📩</button>
+            </div>
+            <div class="role-chat-content doctor-chat-content">
+                <div id="doctor-chat-members" class="role-members">
+                    <!-- Lista membri Doctor -->
+                </div>
+                <div id="doctor-messages" class="chat-messages">
+                    <!-- Mesaje -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="doctor-chat-input" placeholder="Mesaj secret..." maxlength="200">
+                    <button id="send-doctor-message-btn" class="btn btn-primary">Trimite</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT DETECTIVE (Pentru jucătorii Detective) -->
+        <div id="detective-chat-panel" class="role-chat-panel detective-chat-panel hidden">
+            <div class="role-chat-header detective-chat-header">
+                <h3>🔍 Chat Detectiv Secret</h3>
+                <button id="toggle-detective-chat-btn" class="btn-small">📩</button>
+            </div>
+            <div class="role-chat-content detective-chat-content">
+                <div id="detective-chat-members" class="role-members">
+                    <!-- Lista membri Detective -->
+                </div>
+                <div id="detective-messages" class="chat-messages">
+                    <!-- Mesaje -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="detective-chat-input" placeholder="Mesaj secret..." maxlength="200">
+                    <button id="send-detective-message-btn" class="btn btn-primary">Trimite</button>
                 </div>
             </div>
         </div>
