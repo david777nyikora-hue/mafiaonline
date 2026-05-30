@@ -52,6 +52,7 @@ let isDetectiveChatOpen = false;
 
 // Team consensus pentru night actions
 let teamChoices = {}; // { playerId: targetId }
+let currentNightAction = null; // Stochează detalii despre acțiunea curentă { type, players, isTeam }
 
 // ====== INIȚIALIZARE ======
 document.addEventListener('DOMContentLoaded', () => {
@@ -295,6 +296,22 @@ function setupSocketListeners() {
     
     socket.on('team-consensus-failed', (data) => {
         showNotification('❌ Echipa ta a ales ținte diferite! Alegeți din nou aceeași persoană.', 'error');
+        
+        // Reconstruiește interfața folosind datele salvate
+        if (currentNightAction) {
+            const { type, players, isTeam } = currentNightAction;
+            
+            // Resetează statusul
+            const statusDiv = document.getElementById('team-consensus-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = `
+                    <p class="consensus-disagree">❌ Echipa a ales diferit! Alegeți DIN NOU aceeași persoană.</p>
+                `;
+            }
+            
+            // Reconstruiește lista de ținte
+            renderActionTargets(players, type, isTeam);
+        }
     });
     
     // Narrator updates - real-time monitoring
@@ -590,6 +607,13 @@ function showMafiaAction(players) {
         <button class="btn btn-danger" id="confirm-action-btn" disabled>Confirmă Alegerea</button>
     `;
     
+    // Salvează detalii pentru posibila resetare
+    currentNightAction = {
+        type: 'mafia',
+        players: targets,
+        isTeam: isTeamAction
+    };
+    
     renderActionTargets(targets, 'mafia', isTeamAction);
 }
 
@@ -610,6 +634,13 @@ function showDoctorAction(players) {
         <div class="players-grid" id="action-targets"></div>
         <button class="btn btn-secondary" id="confirm-action-btn" disabled>Confirmă Alegerea</button>
     `;
+    
+    // Salvează detalii pentru posibila resetare
+    currentNightAction = {
+        type: 'doctor',
+        players: players,
+        isTeam: isTeamAction
+    };
     
     renderActionTargets(players, 'doctor', isTeamAction);
 }
@@ -633,17 +664,25 @@ function showDetectiveAction(players) {
         <button class="btn btn-secondary" id="confirm-action-btn" disabled>Confirmă Investigația</button>
     `;
     
+    // Salvează detalii pentru posibila resetare
+    currentNightAction = {
+        type: 'detective',
+        players: targets,
+        isTeam: isTeamAction
+    };
+    
     renderActionTargets(targets, 'detective', isTeamAction);
 }
 
 function renderActionTargets(players, actionType, isTeamAction = false) {
     const container = document.getElementById('action-targets');
+    const confirmBtn = document.getElementById('confirm-action-btn');
     let selectedTarget = null;
+    let selectedTargetName = null;
     
-    // Reset team choices pentru această rundă
-    if (isTeamAction) {
-        teamChoices = {};
-    }
+    // Curăță containerul și resetează butonul
+    container.innerHTML = '';
+    confirmBtn.disabled = true;
     
     players.forEach(player => {
         const card = document.createElement('div');
@@ -654,13 +693,18 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
             container.querySelectorAll('.player-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             selectedTarget = player.id;
-            document.getElementById('confirm-action-btn').disabled = false;
+            selectedTargetName = player.name;
+            confirmBtn.disabled = false;
         });
         
         container.appendChild(card);
     });
     
-    document.getElementById('confirm-action-btn').addEventListener('click', () => {
+    // Clonează butonul pentru a elimina event listeners vechi
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    
+    newConfirmBtn.addEventListener('click', () => {
         if (selectedTarget) {
             if (isTeamAction) {
                 // Trimite alegerea către server pentru verificare consens
@@ -668,6 +712,23 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
                     actionType: actionType,
                     targetId: selectedTarget
                 });
+                
+                // Dezactivează toate cardurile și butonul
+                container.querySelectorAll('.player-card').forEach(c => {
+                    c.style.pointerEvents = 'none';
+                    c.style.opacity = '0.6';
+                });
+                newConfirmBtn.disabled = true;
+                newConfirmBtn.textContent = 'Alegere trimisă...';
+                
+                // Afișează mesaj de așteptare consens
+                const statusDiv = document.getElementById('team-consensus-status');
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <p>⏳ Ai ales: <strong>${selectedTargetName}</strong></p>
+                        <p>Așteaptă ca toți membrii echipei să aleagă aceeași țintă...</p>
+                    `;
+                }
             } else {
                 // Acțiune solo, trimite direct
                 socket.emit('night-action', {
