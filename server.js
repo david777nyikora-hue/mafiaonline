@@ -493,12 +493,42 @@ io.on('connection', (socket) => {
                     // Jucător normal pleacă
                     room.players = room.players.filter(p => p.id !== socket.id);
                     
+                    // Elimină jucătorul din alivePlayers și deadPlayers
+                    room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== socket.id);
+                    room.gameState.deadPlayers = room.gameState.deadPlayers.filter(p => p.id !== socket.id);
+                    
+                    // Curăță alegerea jucătorului din teamChoices dacă există
+                    Object.keys(room.gameState.teamChoices).forEach(actionType => {
+                        delete room.gameState.teamChoices[actionType][socket.id];
+                    });
+                    
+                    // Curăță votul jucătorului din votes dacă există
+                    delete room.gameState.votes[socket.id];
+                    
                     // Dacă nu mai sunt jucători, șterge camera
                     if (room.players.length === 0) {
                         gameRooms.delete(roomCode);
                         console.log(`🗑️ Camera ${roomCode} ștearsă`);
                     } else {
                         io.to(roomCode).emit('player-left', { players: room.players });
+                        
+                        // Verifică dacă jocul poate continua după deconectare
+                        if (room.started) {
+                            if (room.gameState.phase === 'night') {
+                                // Re-verifică dacă toate acțiunile de noapte sunt complete
+                                checkNightActionsComplete(roomCode);
+                            } else if (room.gameState.phase === 'day') {
+                                // Re-verifică dacă toate voturile sunt complete
+                                const aliveCount = room.gameState.alivePlayers.length;
+                                const voteCount = Object.keys(room.gameState.votes).length;
+                                if (voteCount === aliveCount && aliveCount > 0) {
+                                    processVotes(roomCode);
+                                }
+                            }
+                            
+                            // Verifică condiția de victorie după deconectare
+                            checkWinCondition(roomCode);
+                        }
                     }
                 }
             }
@@ -608,16 +638,17 @@ function processNightResults(roomCode) {
     if (actions.detective !== undefined) {
         const target = room.players.find(p => p.id === actions.detective);
         if (target) {
-            const detective = room.gameState.alivePlayers.find(p => p.role === 'DETECTIVE');
+            // Găsește TOȚI detectivii vii
+            const detectives = room.gameState.alivePlayers.filter(p => p.role === 'DETECTIVE');
             detectiveResult = {
                 targetName: target.name,
                 isMafia: target.role === 'MAFIA'
             };
             
-            // Trimite rezultatul doar detectivului
-            if (detective) {
+            // Trimite rezultatul la TOȚI detectivii
+            detectives.forEach(detective => {
                 io.to(detective.id).emit('detective-result', detectiveResult);
-            }
+            });
         }
     }
     
