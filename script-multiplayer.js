@@ -549,6 +549,11 @@ function createRoom() {
         return;
     }
     
+    if (playerName.length > 20) {
+        showNotification('Numele este prea lung (max 20 caractere)!', 'error');
+        return;
+    }
+    
     // Salvează numele global și în localStorage
     myName = playerName;
     saveName(playerName, rememberName);
@@ -570,6 +575,11 @@ function joinRoom() {
     
     if (!playerName) {
         showNotification('Introdu un nume!', 'error');
+        return;
+    }
+    
+    if (playerName.length > 20) {
+        showNotification('Numele este prea lung (max 20 caractere)!', 'error');
         return;
     }
     
@@ -704,8 +714,11 @@ function showNarratorScreen() {
     const mafiaMessages = document.getElementById('narrator-mafia-messages');
     mafiaMessages.innerHTML = '<p class="instruction">📡 Monitorizezi chat-ul Mafia...</p>';
     
-    // Setup event listener pentru end game
-    document.getElementById('narrator-end-game-btn').addEventListener('click', () => {
+    // Setup event listener pentru end game - previne duplicate listeners
+    const endGameBtn = document.getElementById('narrator-end-game-btn');
+    const newEndGameBtn = endGameBtn.cloneNode(true);
+    endGameBtn.parentNode.replaceChild(newEndGameBtn, endGameBtn);
+    newEndGameBtn.addEventListener('click', () => {
         if (confirm('Sigur vrei să închei jocul?')) {
             location.reload();
         }
@@ -809,8 +822,12 @@ function showMafiaAction(players) {
         return player && player.role !== 'MAFIA';
     });
     
-    // Verifică dacă sunt în echipă (2+ membri)
-    const isTeamAction = mafiaTeam.length >= 2;
+    // Verifică dacă sunt în echipă (2+ membri) - folosește alive players
+    const aliveMafiaCount = players.filter(p => {
+        const player = currentPlayers.find(cp => cp.id === p.id && cp.role === 'MAFIA' && cp.alive);
+        return player;
+    }).length;
+    const isTeamAction = aliveMafiaCount >= 2;
     const instructionText = isTeamAction ? 
         '⚠️ ECHIPĂ: Toți membrii Mafia trebuie să aleagă ACEEAȘI victimă!' : 
         'Selectează un jucător pentru eliminare';
@@ -838,7 +855,12 @@ function showMafiaAction(players) {
 function showDoctorAction(players) {
     const container = document.getElementById('night-action-container');
     
-    const isTeamAction = doctorTeam.length >= 2;
+    // Verifică alive doctors pentru team action
+    const aliveDoctorCount = players.filter(p => {
+        const player = currentPlayers.find(cp => cp.id === p.id && cp.role === 'DOCTOR' && cp.alive);
+        return player;
+    }).length;
+    const isTeamAction = aliveDoctorCount >= 2;
     const instructionText = isTeamAction ? 
         '⚠️ ECHIPĂ: Toți doctorii trebuie să aleagă ACEEAȘI persoană de salvat!' : 
         'Alege pe cine să salvezi (poți să te alegi pe tine)';
@@ -867,7 +889,12 @@ function showDetectiveAction(players) {
     const container = document.getElementById('night-action-container');
     const targets = players.filter(p => p.id !== socket.id);
     
-    const isTeamAction = detectiveTeam.length >= 2;
+    // Verifică alive detectives pentru team action
+    const aliveDetectiveCount = players.filter(p => {
+        const player = currentPlayers.find(cp => cp.id === p.id && cp.role === 'DETECTIVE' && cp.alive);
+        return player;
+    }).length;
+    const isTeamAction = aliveDetectiveCount >= 2;
     const instructionText = isTeamAction ? 
         '⚠️ ECHIPĂ: Toți detectivii trebuie să aleagă ACEEAȘI persoană de investigat!' : 
         'Selectează un jucător pentru a afla dacă este Mafia';
@@ -923,7 +950,10 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
     });
     
     confirmBtn.addEventListener('click', () => {
-        if (selectedTarget) {
+        if (selectedTarget && !confirmBtn.disabled) {
+            // Dezactivează IMEDIAT pentru a preveni double-click
+            confirmBtn.disabled = true;
+            
             if (isTeamAction) {
                 // Trimite alegerea către server pentru verificare consens
                 socket.emit('team-choice', {
@@ -931,12 +961,11 @@ function renderActionTargets(players, actionType, isTeamAction = false) {
                     targetId: selectedTarget
                 });
                 
-                // Dezactivează toate cardurile și butonul
+                // Dezactivează toate cardurile
                 container.querySelectorAll('.player-card').forEach(c => {
                     c.style.pointerEvents = 'none';
                     c.style.opacity = '0.6';
                 });
-                confirmBtn.disabled = true;
                 confirmBtn.textContent = 'Alegere trimisă...';
                 
                 // Afișează mesaj de așteptare consens
@@ -1036,6 +1065,7 @@ function renderVotingPlayers(players) {
     const container = document.getElementById('alive-players-list');
     container.innerHTML = '';
     let selectedVote = null;
+    let hasVoted = false;
     
     players.forEach(player => {
         const card = document.createElement('div');
@@ -1046,11 +1076,13 @@ function renderVotingPlayers(players) {
         `;
         
         card.addEventListener('click', () => {
-            if (selectedVote === player.id) return; // Deja a votat
+            // Previne double-click sau vot multiplu
+            if (hasVoted || selectedVote !== null) return;
             
+            hasVoted = true;
+            selectedVote = player.id;
             container.querySelectorAll('.player-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
-            selectedVote = player.id;
             
             // Trimite votul
             socket.emit('vote', { targetId: player.id });
@@ -1194,6 +1226,13 @@ function sendRoleMessage(role) {
     input.value = '';
 }
 
+// Helper function pentru XSS protection
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function displayRoleMessage(role, message) {
     // Afișează în chat-ul specific pentru jucători
     const roleMessages = document.getElementById(`${role}-messages`);
@@ -1201,7 +1240,7 @@ function displayRoleMessage(role, message) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chat-message';
         messageDiv.innerHTML = `
-            <strong>${message.sender}:</strong> ${message.text}
+            <strong>${escapeHTML(message.sender)}:</strong> ${escapeHTML(message.text)}
             <span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>
         `;
         roleMessages.appendChild(messageDiv);
@@ -1215,7 +1254,7 @@ function displayRoleMessage(role, message) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message';
             messageDiv.innerHTML = `
-                <strong>[${role.toUpperCase()}] ${message.sender}:</strong> ${message.text}
+                <strong>[${role.toUpperCase()}] ${escapeHTML(message.sender)}:</strong> ${escapeHTML(message.text)}
                 <span class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</span>
             `;
             narratorMessages.appendChild(messageDiv);

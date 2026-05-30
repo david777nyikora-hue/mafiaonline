@@ -248,6 +248,15 @@ io.on('connection', (socket) => {
         
         if (!player) return;
         
+        // Verifică dacă consensul este deja locked pentru acest actionType
+        if (!room.gameState.consensusLocked) {
+            room.gameState.consensusLocked = {};
+        }
+        
+        if (room.gameState.consensusLocked[actionType]) {
+            return; // Consensul a fost deja atins, ignoră alegeri noi
+        }
+        
         // Inițializează teamChoices pentru acest actionType dacă nu există
         if (!room.gameState.teamChoices[actionType]) {
             room.gameState.teamChoices[actionType] = {};
@@ -289,6 +298,9 @@ io.on('connection', (socket) => {
         
         // Dacă toți au ales și sunt de acord
         if (choicesMade === totalMembers && allAgree) {
+            // Lock consensus pentru acest actionType
+            room.gameState.consensusLocked[actionType] = true;
+            
             // Salvează acțiunea finală
             room.gameState.nightActions[actionType] = targetIds[0];
             
@@ -402,6 +414,11 @@ io.on('connection', (socket) => {
             return; // Doar Mafia poate trimite mesaje
         }
         
+        // Validare mesaj - max 200 caractere
+        if (!data.message || data.message.length > 200) {
+            return; // Ignoră mesaje invalide
+        }
+        
         const message = {
             sender: player.name,
             senderId: player.id,
@@ -459,6 +476,7 @@ io.on('connection', (socket) => {
         room.gameState.nightActions = {};
         room.gameState.teamChoices = {};
         room.gameState.votes = {};
+        room.gameState.consensusLocked = {};  // Curăță consensus locks
         room.gameState.alivePlayers = [];
         room.gameState.deadPlayers = [];
         room.gameState.mafiaChat = [];
@@ -565,9 +583,41 @@ io.on('connection', (socket) => {
         if (roomCode) {
             const room = gameRooms.get(roomCode);
             if (room) {
-                // Dacă host-ul pleacă, închide întregul lobby
-                if (room.host === socket.id) {
-                    console.log(`🚪 Host-ul a părăsit camera ${roomCode} - lobby închis`);
+                // Dacă host-ul pleacă și jocul A ÎNCEPUT, permite reconnect
+                if (room.host === socket.id && room.started) {
+                    const player = room.players.find(p => p.id === socket.id);
+                    if (player) {
+                        player.disconnected = true;
+                        
+                        console.log(`⏳ Host ${player.name} deconectat - are 5 minute pentru reconnect`);
+                        
+                        // Timeout de 5 minute pentru host
+                        const playerId = player.id;
+                        player.disconnectTimeout = setTimeout(() => {
+                            // După 5 min, închide lobby-ul
+                            console.log(`⏰ Timeout reconnect host - închide lobby ${roomCode}`);
+                            io.to(roomCode).emit('lobby-closed', {
+                                message: 'Host-ul nu s-a reconectat. Lobby-ul a fost închis.'
+                            });
+                            
+                            const room = gameRooms.get(roomCode);
+                            if (room) {
+                                room.players.forEach(p => {
+                                    if (p.disconnectTimeout) clearTimeout(p.disconnectTimeout);
+                                });
+                                gameRooms.delete(roomCode);
+                            }
+                        }, 5 * 60 * 1000);
+                        
+                        // Notifică ceilalți jucători
+                        io.to(roomCode).emit('player-disconnected', {
+                            playerName: player.name,
+                            players: room.players
+                        });
+                    }
+                } else if (room.host === socket.id && !room.started) {
+                    // Joc NU a început - închide lobby-ul direct
+                    console.log(`🚺 Host-ul a părăsit camera ${roomCode} în lobby - închis`);
                     
                     // Curăță toate timeout-urile de disconnect active
                     room.players.forEach(player => {
@@ -667,8 +717,11 @@ function handleRoleChat(socket, data, roleName, roleKey) {
     const player = room.players.find(p => p.id === socket.id);
     if (!player || player.role !== roleName) {
         return; // Doar jucătorii cu rolul respectiv pot trimite mesaje
-    }
-    
+    }    
+    // Validare mesaj - max 200 caractere
+    if (!data.message || data.message.length > 200) {
+        return; // Ignoră mesaje invalide
+    }    
     const message = {
         sender: player.name,
         senderId: player.id,
@@ -699,6 +752,7 @@ function startNightPhase(roomCode) {
     room.gameState.phase = 'night';
     room.gameState.nightActions = {};
     room.gameState.teamChoices = {}; // Reset team consensus pentru rundă nouă
+    room.gameState.consensusLocked = {}; // Reset consensus locks pentru rundă nouă
     
     console.log(`🌙 Noapte începută în ${roomCode} - Runda ${room.gameState.round}`);
     
@@ -823,8 +877,11 @@ function processVotes(roomCode) {
     
     Object.entries(voteCounts).forEach(([playerId, votes]) => {
         if (votes > maxVotes) {
-            maxVotes = votes;
-            eliminated = room.players.find(p => p.id === playerId);
+            const player = room.players.find(p => p.id === playerId);
+            if (player) {  // Verifică dacă jucătorul există încă
+                maxVotes = votes;
+                eliminated = player;
+            }
         }
     });
     

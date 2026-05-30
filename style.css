@@ -598,27 +598,395 @@ body {
     background: var(--citizen-color);
 }
 
-/* ====== RESPONSIVE ====== */
-@media (max-width: 768px) {
+/* ====== RESPONSIVE DESIGN ÎMBUNĂTĂȚIT ====== */
+
+/* ========== MOBILE (<600px) ========== */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    /* Titluri & Text */
     .game-title h1 {
-        font-size: 2.5rem;
-        letter-spacing: 5px;
+        font-size: 2rem;
+        letter-spacing: 3px;
     }
-    
-    .setup-section {
-        padding: 25px;
+
+    .subtitle {
+        font-size: 1rem;
     }
-    
-    .player-names {
-        grid-template-columns: 1fr;
+
+    /* Secțiuni & Containere */
+    .setup-section,
+    .menu-section,
+    .lobby-container,
+    .action-container,
+    .role-reveal-container,
+    .end-container,
+    .narrator-container {
+        padding: 20px;
     }
-    
+
+    /* Butoane - Touch Friendly */
+    .btn {
+        padding: 14px 20px;
+        font-size: 1rem;
+        min-height: 48px;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-small {
+        padding: 10px 14px;
+        min-height: 44px;
+    }
+
+    /* Input-uri */
+    .input-group input,
+    .player-name-input {
+        padding: 12px;
+        font-size: 1rem;
+    }
+
+    /* Grid-uri - Single Column */
+    .player-names,
     .players-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
-    
+
+    /* Room Code Display */
+    .room-code-display {
+        padding: 20px;
+        margin: 20px 0;
+    }
+
+    .room-code {
+        font-size: 2rem;
+        letter-spacing: 8px;
+    }
+
+    /* Lobby */
+    #lobby-players-list {
+        max-height: 200px;
+    }
+
+    .lobby-player-item {
+        padding: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    /* Phase Headers */
+    .phase-header {
+        padding: 25px 15px;
+    }
+
     .phase-header h1 {
         font-size: 2rem;
+    }
+
+    .phase-subtitle {
+        font-size: 1.1rem;
+    }
+
+    /* Role Card */
+    .role-card {
+        padding: 25px;
+    }
+
+    .role-icon {
+        font-size: 3.5rem;
+    }
+
+    .role-card h2 {
+        font-size: 1.8rem;
+    }
+
+    .role-card p {
+        font-size: 1rem;
+    }
+
+    /* Player Cards */
+    .player-card {
+        padding: 15px;
+    }
+
+    .player-card h3 {
+        font-size: 1.1rem;
+    }
+
+    /* Chat Panels - Fullwidth Bottom */
+    .role-chat-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 20px 20px 0 0;
+        max-height: 70vh;
+    }
+
+    .role-chat-content {
+        max-height: calc(70vh - 120px);
+    }
+
+    .chat-messages {
+        height: 180px;
+    }
+
+    .chat-input-area {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .chat-input-area input,
+    .chat-input-area button {
+        width: 100%;
+    }
+
+    /* Narrator */
+    .narrator-content {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .narrator-header h1 {
+        font-size: 1.8rem;
+    }
+
+    .narrator-players-list {
+        max-height: 250px;
+    }
+
+    /* Team Info */
+    .mafia-team-info,
+    .doctor-team-info,
+    .detective-team-info {
+        padding: 15px;
+    }
+
+    /* Final Stats */
+    .victory-message h1 {
+        font-size: 2rem;
+    }
+
+    .final-stats {
+        padding: 20px;
+    }
+
+    .final-player-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    /* Reconnect Overlay */
+    .reconnect-box {
+        padding: 25px;
+        margin: 0 15px;
+    }
+
+    .reconnect-box h2 {
+        font-size: 1.4rem;
+    }
+
+    .reconnect-box p {
+        font-size: 1rem;
+    }
+
+    .reconnect-box button {
+        width: 100%;
+        margin: 8px 0;
+    }
+
+    /* Role Selection */
+    .role-selection {
+        padding: 15px;
+    }
+
+    /* Voting Section */
+    .voting-section {
+        padding: 25px 20px;
+    }
+
+    .voting-section h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/* ========== MOBILE LANDSCAPE & SMALL TABLET (600px-768px) ========== */
+@media (min-width: 601px) and (max-width: 768px) {
+    /* Titluri */
+    .game-title h1 {
+        font-size: 2.8rem;
+        letter-spacing: 5px;
+    }
+
+    /* Grid-uri - 2 Coloane */
+    .player-names,
+    .players-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+
+    /* Room Code */
+    .room-code {
+        font-size: 2.5rem;
+        letter-spacing: 10px;
+    }
+
+    /* Chat Panels - Bottom Right dar mai mic */
+    .role-chat-panel {
+        width: 320px;
+        bottom: 15px;
+        right: 15px;
+    }
+
+    .chat-messages {
+        height: 200px;
+    }
+
+    /* Narrator */
+    .narrator-content {
+        grid-template-columns: 1fr;
+    }
+
+    /* Containere */
+    .setup-section,
+    .menu-section,
+    .lobby-container,
+    .action-container {
+        padding: 30px;
+    }
+}
+
+/* ========== TABLET (769px-900px) ========== */
+@media (min-width: 769px) and (max-width: 900px) {
+    /* Grid-uri - 2 Coloane */
+    .players-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Chat Panels */
+    .role-chat-panel {
+        width: 340px;
+    }
+
+    /* Narrator */
+    .narrator-content {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ========== DESKTOP LARGE (>1200px) ========== */
+@media (min-width: 1201px) {
+    .container {
+        max-width: 1200px;
+    }
+
+    /* Grid-uri - 3-4 Coloane */
+    .players-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .player-names {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Chat Panels mai mari */
+    .role-chat-panel {
+        width: 420px;
+    }
+
+    .chat-messages {
+        height: 300px;
+    }
+
+    /* Font-uri mai mari */
+    .game-title h1 {
+        font-size: 4.5rem;
+    }
+
+    .phase-header h1 {
+        font-size: 3.5rem;
+    }
+}
+
+/* ========== LANDSCAPE MODE (Mobile Rotit) ========== */
+@media (max-height: 500px) and (orientation: landscape) {
+    .phase-header {
+        padding: 15px;
+    }
+
+    .phase-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .role-card {
+        padding: 20px;
+    }
+
+    .role-icon {
+        font-size: 2.5rem;
+    }
+
+    .chat-messages {
+        height: 120px;
+    }
+
+    .role-chat-panel {
+        max-height: 80vh;
+    }
+}
+
+/* ========== TOUCH DEVICES ========== */
+@media (hover: none) and (pointer: coarse) {
+    /* Butoane mai mari pentru touch */
+    .btn {
+        min-height: 48px;
+    }
+
+    .player-card {
+        padding: 18px;
+        transition: all 0.2s;
+    }
+
+    .player-card:active {
+        transform: scale(0.98);
+    }
+
+    /* Scrollbar vizibil pe touch */
+    .chat-messages,
+    #lobby-players-list,
+    .narrator-players-list {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* ========== PRINT (Opțional) ========== */
+@media print {
+    .btn,
+    .chat-input-area,
+    .role-chat-panel {
+        display: none;
+    }
+
+    body {
+        background: white;
+        color: black;
+    }
+}
+
+/* ========== ANIMATIONS PERFORMANCE ========== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
 
