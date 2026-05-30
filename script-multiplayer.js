@@ -434,14 +434,14 @@ function setupSocketListeners() {
         roomCode = room.code;
         currentPlayers = room.players;
         myRole = player.role;
+        myId = player.id;
+        isHost = player.isHost || false;
         
-        // Restaurează echipele
-        if (room.gameState.alivePlayers) {
-            const alivePlayers = room.gameState.alivePlayers;
-            mafiaTeam = alivePlayers.filter(p => p.role === 'MAFIA');
-            doctorTeam = alivePlayers.filter(p => p.role === 'DOCTOR');
-            detectiveTeam = alivePlayers.filter(p => p.role === 'DETECTIVE');
-        }
+        // Restaurează echipele - folosește toți jucătorii, nu doar cei vii
+        const allGamePlayers = [...(room.gameState.alivePlayers || []), ...(room.gameState.deadPlayers || [])];
+        mafiaTeam = allGamePlayers.filter(p => p.role === 'MAFIA');
+        doctorTeam = allGamePlayers.filter(p => p.role === 'DOCTOR');
+        detectiveTeam = allGamePlayers.filter(p => p.role === 'DETECTIVE');
         
         // Dacă ești Narrator
         if (myRole === 'NARRATOR') {
@@ -451,7 +451,14 @@ function setupSocketListeners() {
         showNotification('✅ Reconectat cu succes!', 'success');
         
         // Navighează la ecranul potrivit în funcție de faza jocului
-        if (room.gameState.phase === 'night') {
+        if (room.gameState.phase === 'lobby') {
+            switchScreen('lobby-screen');
+            document.getElementById('display-room-code').textContent = roomCode;
+            if (isHost) {
+                document.getElementById('host-controls').style.display = 'block';
+            }
+            updateLobbyPlayers(room.players);
+        } else if (room.gameState.phase === 'night') {
             startNightPhase({ round: room.gameState.round, alivePlayers: room.gameState.alivePlayers });
         } else if (room.gameState.phase === 'day') {
             startDayPhase({ 
@@ -470,6 +477,11 @@ function setupSocketListeners() {
 
 // ====== FUNCȚIE RECONNECT ======
 function showReconnectOption() {
+    // Verifică dacă overlay-ul există deja pentru a preveni duplicate
+    if (document.getElementById('reconnect-overlay')) {
+        return;
+    }
+    
     const container = document.querySelector('.container');
     const reconnectDiv = document.createElement('div');
     reconnectDiv.id = 'reconnect-overlay';

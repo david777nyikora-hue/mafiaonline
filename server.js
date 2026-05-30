@@ -444,6 +444,14 @@ io.on('connection', (socket) => {
         
         if (!room) return;
         
+        // Curăță toate timeout-urile de disconnect active
+        room.players.forEach(player => {
+            if (player.disconnectTimeout) {
+                clearTimeout(player.disconnectTimeout);
+                delete player.disconnectTimeout;
+            }
+        });
+        
         // Resetează starea jocului
         room.started = false;
         room.gameState.phase = 'lobby';
@@ -455,7 +463,7 @@ io.on('connection', (socket) => {
         room.gameState.deadPlayers = [];
         room.gameState.mafiaChat = [];
         
-        // Resetează rolurile jucătorilor
+        // Resetează rolurile jucătorilor și elimină flag-ul disconnected
         room.players = room.players.map(p => ({
             id: p.id,
             name: p.name,
@@ -498,6 +506,11 @@ io.on('connection', (socket) => {
         const oldId = player.id;
         player.id = socket.id;
         player.disconnected = false;
+        
+        // Dacă e host (narrator), actualizează room.host
+        if (player.isHost) {
+            room.host = socket.id;
+        }
         
         // Actualizează socket ID în alivePlayers/deadPlayers
         const alivePlayer = room.gameState.alivePlayers.find(p => p.id === oldId);
@@ -556,6 +569,13 @@ io.on('connection', (socket) => {
                 if (room.host === socket.id) {
                     console.log(`🚪 Host-ul a părăsit camera ${roomCode} - lobby închis`);
                     
+                    // Curăță toate timeout-urile de disconnect active
+                    room.players.forEach(player => {
+                        if (player.disconnectTimeout) {
+                            clearTimeout(player.disconnectTimeout);
+                        }
+                    });
+                    
                     // Notifică toți jucătorii că lobby-ul se închide
                     io.to(roomCode).emit('lobby-closed', {
                         message: 'Host-ul a părăsit jocul. Lobby-ul a fost închis.'
@@ -584,16 +604,22 @@ io.on('connection', (socket) => {
                         player.disconnectTimeout = setTimeout(() => {
                             console.log(`🗑️ ${player.name} eliminat definitiv după timeout`);
                             
+                            // Salvează player.id înainte de ștergere (socket.id e deja invalid)
+                            const playerId = player.id;
+                            
                             // Șterge jucătorul definitiv
-                            room.players = room.players.filter(p => p.id !== socket.id);
-                            room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== socket.id);
-                            room.gameState.deadPlayers = room.gameState.deadPlayers.filter(p => p.id !== socket.id);
+                            room.players = room.players.filter(p => p.id !== playerId);
+                            room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== playerId);
+                            room.gameState.deadPlayers = room.gameState.deadPlayers.filter(p => p.id !== playerId);
                             
                             // Curăță alegerea jucătorului
                             Object.keys(room.gameState.teamChoices).forEach(actionType => {
-                                delete room.gameState.teamChoices[actionType][socket.id];
+                                delete room.gameState.teamChoices[actionType][playerId];
                             });
-                            delete room.gameState.votes[socket.id];
+                            delete room.gameState.votes[playerId];
+                            
+                            // Verifică dacă jucătorul a făcut o acțiune solo în nightActions
+                            // nightActions stochează doar targetId, nu player ID, deci nu trebuie curățat
                             
                             // Notifică eliminarea definitivă
                             io.to(roomCode).emit('player-removed-timeout', {
@@ -853,6 +879,14 @@ function checkWinCondition(roomCode) {
 function endGame(roomCode, winner) {
     const room = gameRooms.get(roomCode);
     if (!room) return;
+    
+    // Curăță toate timeout-urile de disconnect active
+    room.players.forEach(player => {
+        if (player.disconnectTimeout) {
+            clearTimeout(player.disconnectTimeout);
+            delete player.disconnectTimeout;
+        }
+    });
     
     room.gameState.phase = 'ended';
     
