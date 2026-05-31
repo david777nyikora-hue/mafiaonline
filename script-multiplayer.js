@@ -404,6 +404,18 @@ function setupSocketListeners() {
     socket.on('seer-revelation', (data) => {
         showNotification(`👁️ SEER: ${data.targetName} este ${ROLES[data.targetRole]?.name || data.targetRole}!`, 'info', 5000);
         console.log('🔮 Seer revelation:', data);
+        
+        // NARRATOR: Monitorizează ce vede jucătorul cu SEER
+        if (myRole === 'NARRATOR') {
+            logNarratorSeerRevelation(data);
+        }
+    });
+    
+    // NARRATOR: Primește copie a tuturor Seer revelations
+    socket.on('narrator-seer-revelation', (data) => {
+        if (myRole === 'NARRATOR') {
+            logNarratorSeerRevelation(data);
+        }
     });
     
     // TRAITOR MODIFIER - Activare
@@ -429,10 +441,18 @@ function setupSocketListeners() {
         console.log('⚖️ Tiebreaker activated:', data);
     });
     
+    // HEALER HIT - Notificare pentru Narrator când jucător cu HEALER e lovit
+    socket.on('narrator-healer-hit', (data) => {
+        if (myRole === 'NARRATOR') {
+            logNarratorModifierEvent(`🛡️ ${data.playerName} a fost lovit! (HEALER: ${data.hitCount}/2 lovituri)`, 'healer');
+        }
+    });
+    
     // NARRATOR - Notificări speciale
     socket.on('narrator-notification', (data) => {
         if (myRole === 'NARRATOR') {
             showNotification(data.message, 'info', 5000);
+            logNarratorModifierEvent(data.message, 'info');
         }
     });
     
@@ -782,7 +802,14 @@ function showNarratorScreen() {
                 'SEER': 'Seer',
                 'TIEBREAKER': 'Tiebreaker'
             };
-            modifierBadge = `<span class="modifier-badge" style="font-size: 0.8rem; color: #ffd700; margin-left: 8px;">${modifierIcons[player.modifier]} ${modifierNames[player.modifier]}</span>`;
+            
+            let extraInfo = '';
+            // Arată hitCount pentru HEALER
+            if (player.modifier === 'HEALER' && player.hitCount > 0) {
+                extraInfo = ` (${player.hitCount}/2 lovituri)`;
+            }
+            
+            modifierBadge = `<span class="modifier-badge" style="font-size: 0.8rem; color: #ffd700; margin-left: 8px;">${modifierIcons[player.modifier]} ${modifierNames[player.modifier]}${extraInfo}</span>`;
         }
         
         playerItem.innerHTML = `
@@ -815,17 +842,46 @@ function updateNarratorActions(data) {
     
     if (data.actions.mafia !== undefined) {
         const target = data.players.find(p => p.id === data.actions.mafia);
+        const mafiaPlayers = data.players.filter(p => p.role === 'MAFIA' && p.alive);
+        const seerMafia = mafiaPlayers.filter(p => p.modifier === 'SEER');
+        
         actionsList.innerHTML += `<p>🔫 Mafia atacă: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+        
+        // Arată dacă vreun Mafioso are SEER
+        if (seerMafia.length > 0 && target) {
+            actionsList.innerHTML += `<p class="modifier-info">👁️ <em>${seerMafia.map(p => p.name).join(', ')} vor vedea rolul lui ${target.name}</em></p>`;
+        }
+        
+        // Arată dacă ținta are HEALER
+        if (target && target.modifier === 'HEALER') {
+            actionsList.innerHTML += `<p class="modifier-info">🛡️ <em>${target.name} are HEALER! (${target.hitCount || 0}/2 lovituri)</em></p>`;
+        }
     }
     
     if (data.actions.doctor !== undefined) {
         const target = data.players.find(p => p.id === data.actions.doctor);
+        const doctorPlayers = data.players.filter(p => p.role === 'DOCTOR' && p.alive);
+        const seerDoctor = doctorPlayers.filter(p => p.modifier === 'SEER');
+        
         actionsList.innerHTML += `<p>💊 Doctor salvează: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+        
+        // Arată dacă vreun Doctor are SEER
+        if (seerDoctor.length > 0 && target) {
+            actionsList.innerHTML += `<p class="modifier-info">👁️ <em>${seerDoctor.map(p => p.name).join(', ')} vor vedea rolul lui ${target.name}</em></p>`;
+        }
     }
     
     if (data.actions.detective !== undefined) {
         const target = data.players.find(p => p.id === data.actions.detective);
+        const detectivePlayers = data.players.filter(p => p.role === 'DETECTIVE' && p.alive);
+        const seerDetective = detectivePlayers.filter(p => p.modifier === 'SEER');
+        
         actionsList.innerHTML += `<p>🔍 Detectiv investighează: <strong>${target ? target.name : 'Unknown'}</strong></p>`;
+        
+        // Arată dacă vreun Detectiv are SEER
+        if (seerDetective.length > 0 && target) {
+            actionsList.innerHTML += `<p class="modifier-info">👁️ <em>${seerDetective.map(p => p.name).join(', ')} vor vedea rolul EXACT al lui ${target.name}</em></p>`;
+        }
     }
     
     if (Object.keys(data.actions).length === 0) {
@@ -840,12 +896,15 @@ function updateNarratorVotes(data) {
     votesList.innerHTML = '<h3>Voturi curente:</h3>';
     
     const voteCounts = {};
+    const tiebreakers = data.players.filter(p => p.modifier === 'TIEBREAKER' && p.alive);
+    
     Object.entries(data.votes).forEach(([voterId, targetId]) => {
         const voter = data.players.find(p => p.id === voterId);
         const target = data.players.find(p => p.id === targetId);
         
         if (voter && target) {
-            votesList.innerHTML += `<p>• <strong>${voter.name}</strong> → ${target.name}</p>`;
+            const isTiebreaker = voter.modifier === 'TIEBREAKER';
+            votesList.innerHTML += `<p>• <strong>${voter.name}</strong>${isTiebreaker ? ' ⚖️ <em>(TIEBREAKER)</em>' : ''} → ${target.name}</p>`;
             voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
         }
     });
@@ -858,6 +917,62 @@ function updateNarratorVotes(data) {
             const target = data.players.find(p => p.id === targetId);
             votesList.innerHTML += `<p><strong>${target ? target.name : 'Unknown'}</strong>: ${count} voturi</p>`;
         });
+        
+        // Detectează egalități și arată TIEBREAKER
+        const maxVotes = Math.max(...Object.values(voteCounts));
+        const candidates = Object.entries(voteCounts).filter(([_, count]) => count === maxVotes);
+        
+        if (candidates.length > 1 && tiebreakers.length > 0) {
+            votesList.innerHTML += `<br><p class="modifier-info">⚖️ <em>EGALITATE! ${tiebreakers.map(p => p.name).join(', ')} va decide (dacă a votat un candidat)</em></p>`;
+        }
+    }
+}
+
+// Loghează Seer revelations pentru Narrator
+function logNarratorSeerRevelation(data) {
+    const seerLog = document.getElementById('narrator-seer-log');
+    if (!seerLog) return;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    const roleInfo = ROLES[data.targetRole];
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = 'narrator-log-entry seer-revelation-entry';
+    logEntry.innerHTML = `
+        <span class="log-time">[${timestamp}]</span>
+        <strong>${data.playerName || 'Jucător cu SEER'}</strong> vede: 
+        <span class="role-reveal">${roleInfo?.icon || '❓'} ${data.targetName} = ${roleInfo?.name || data.targetRole}</span>
+    `;
+    
+    seerLog.appendChild(logEntry);
+    seerLog.scrollTop = seerLog.scrollHeight;
+    
+    // Păstrează doar ultimele 20 de intrări
+    while (seerLog.children.length > 20) {
+        seerLog.removeChild(seerLog.firstChild);
+    }
+}
+
+// Loghează evenimente modifier pentru Narrator
+function logNarratorModifierEvent(message, type = 'info') {
+    const modifierLog = document.getElementById('narrator-modifier-log');
+    if (!modifierLog) return;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = `narrator-log-entry modifier-event-${type}`;
+    logEntry.innerHTML = `
+        <span class="log-time">[${timestamp}]</span>
+        ${message}
+    `;
+    
+    modifierLog.appendChild(logEntry);
+    modifierLog.scrollTop = modifierLog.scrollHeight;
+    
+    // Păstrează doar ultimele 30 de intrări
+    while (modifierLog.children.length > 30) {
+        modifierLog.removeChild(modifierLog.firstChild);
     }
 }
 

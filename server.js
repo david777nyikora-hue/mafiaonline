@@ -865,6 +865,16 @@ function processNightResults(roomCode) {
                 // HEALER MODIFIER: Verifică dacă victima are modifier HEALER
                 if (victim.modifier === 'HEALER') {
                     victim.hitCount = (victim.hitCount || 0) + 1;
+                    
+                    // Notifică Narratorul despre lovitură
+                    const narrator = room.players.find(p => p.role === 'NARRATOR');
+                    if (narrator) {
+                        io.to(narrator.id).emit('narrator-healer-hit', {
+                            playerName: targetForSeer.name,
+                            hitCount: victim.hitCount
+                        });
+                    }
+                    
                     if (victim.hitCount < 2) {
                         // Supraviețuiește prima lovitură
                         saved = true;
@@ -875,6 +885,7 @@ function processNightResults(roomCode) {
                         victim.alive = false;
                         room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== victim.id);
                         room.gameState.deadPlayers.push(victim);
+                        console.log(`💀 ${targetForSeer.name} a murit la a doua lovitură (HEALER: 2/2)`);
                     }
                 } else {
                     // Fără HEALER - moare direct
@@ -889,6 +900,7 @@ function processNightResults(roomCode) {
                     if (mafioso.modifier === 'SEER') {
                         seerRevelations.push({
                             playerId: mafioso.id,
+                            playerName: mafioso.name,
                             targetName: targetForSeer.name,
                             targetRole: targetForSeer.role
                         });
@@ -905,6 +917,7 @@ function processNightResults(roomCode) {
                 if (doctor.modifier === 'SEER' && savedPlayer) {
                     seerRevelations.push({
                         playerId: doctor.id,
+                        playerName: doctor.name,
                         targetName: savedPlayer.name,
                         targetRole: savedPlayer.role
                     });
@@ -932,6 +945,7 @@ function processNightResults(roomCode) {
                 if (detective.modifier === 'SEER') {
                     seerRevelations.push({
                         playerId: detective.id,
+                        playerName: detective.name,
                         targetName: target.name,
                         targetRole: target.role
                     });
@@ -942,10 +956,21 @@ function processNightResults(roomCode) {
     
     // Trimite revelații SEER
     seerRevelations.forEach(rev => {
+        // Trimite către jucătorul cu SEER
         io.to(rev.playerId).emit('seer-revelation', {
             targetName: rev.targetName,
             targetRole: rev.targetRole
         });
+        
+        // Trimite și către NARRATOR pentru monitoring
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('narrator-seer-revelation', {
+                playerName: rev.playerName,
+                targetName: rev.targetName,
+                targetRole: rev.targetRole
+            });
+        }
     });
     
     // Verifică condiție de victorie (include TRAITOR activation)
