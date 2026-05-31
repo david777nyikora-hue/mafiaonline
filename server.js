@@ -253,6 +253,7 @@ io.on('connection', (socket) => {
             room.players.forEach(player => {
                 const payload = {
                     role: player.role,
+                    modifier: player.modifier, // Include modifier pentru fiecare jucător
                     players: room.players.map(p => ({
                         id: p.id,
                         name: p.name,
@@ -273,12 +274,14 @@ io.on('connection', (socket) => {
                     payload.detectiveTeam = detectiveList;
                 }
                 
-                // Dacă e Narrator (host), trimite toate rolurile
+                // Dacă e Narrator (host), trimite toate rolurile cu modifiers
                 if (player.role === 'NARRATOR') {
                     payload.allRoles = room.players.map(p => ({
                         id: p.id,
                         name: p.name,
                         role: p.role,
+                        modifier: p.modifier, // Include modifier pentru Narrator
+                        hitCount: p.hitCount, // Include hitCount pentru HEALER
                         alive: p.alive
                     }));
                 }
@@ -286,10 +289,15 @@ io.on('connection', (socket) => {
                 io.to(player.id).emit('game-started', payload);
             });
             
-            // După 5 secunde, începe noaptea
+            // După 10 secunde (role reveal countdown), trimite signal să înceapă noaptea
+            // Host-ul va controla manual trecerea către noapte
             setTimeout(() => {
-                startNightPhase(roomCode);
-            }, 5000);
+                // Notifică host-ul că poate începe noaptea
+                const narrator = room.players.find(p => p.role === 'NARRATOR');
+                if (narrator) {
+                    io.to(narrator.id).emit('ready-for-night', { message: 'Jucătorii și-au văzut rolurile. Poți începe noaptea.' });
+                }
+            }, 10000);
         } catch (error) {
             socket.emit('error', { message: error.message });
         }
@@ -553,6 +561,45 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('game-restarted', {
             players: room.players
         });
+    });
+    
+    // HOST: Manual control - Start Night Phase
+    socket.on('host-start-night', () => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room || room.host !== socket.id) {
+            socket.emit('error', { message: 'Doar host-ul poate controla fazele!' });
+            return;
+        }
+        
+        startNightPhase(roomCode);
+    });
+    
+    // HOST: Manual control - Start Day Phase (Process Night Results)
+    socket.on('host-start-day', () => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room || room.host !== socket.id) {
+            socket.emit('error', { message: 'Doar host-ul poate controla fazele!' });
+            return;
+        }
+        
+        processNightResults(roomCode);
+    });
+    
+    // HOST: Manual control - Process Votes
+    socket.on('host-process-votes', () => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room || room.host !== socket.id) {
+            socket.emit('error', { message: 'Doar host-ul poate controla fazele!' });
+            return;
+        }
+        
+        processVotes(roomCode);
     });
     
     // REJOIN ROOM - Reconectare jucător deconectat
@@ -824,12 +871,14 @@ function startNightPhase(roomCode) {
     });
 }
 
-// Verifică dacă toate acțiunile de noapte sunt complete
+    // Verifică dacă toate acțiunile de noapte sunt complete
 function checkNightActionsComplete(roomCode) {
     const room = gameRooms.get(roomCode);
     if (!room) return;
     
     const actions = room.gameState.nightActions;
+    
+    // Filtrează rolurile după jucătorii VIVI (exclude jucătorii morți din echipe duplicate)
     const hasMafia = room.gameState.alivePlayers.some(p => p.role === 'MAFIA');
     const hasDoctor = room.gameState.alivePlayers.some(p => p.role === 'DOCTOR');
     const hasDetective = room.gameState.alivePlayers.some(p => p.role === 'DETECTIVE');
@@ -840,7 +889,13 @@ function checkNightActionsComplete(roomCode) {
         (!hasDetective || actions.detective !== undefined);
     
     if (allActionsComplete) {
-        processNightResults(roomCode);
+        // Nu procesăm automat - trimitem notificare la host să continue
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('ready-for-day', { 
+                message: 'Toate acțiunile nopții au fost completate. Poți continua la ziuă.' 
+            });
+        }
     }
 }
 
@@ -892,6 +947,9 @@ function processNightResults(roomCode) {
                     victim.alive = false;
                     room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== victim.id);
                     room.gameState.deadPlayers.push(victim);
+                    
+                    // Trimite spectator mode către jucătorul mort
+                    enableSpectatorMode(victim.id, room);
                 }
                 
                 // SEER MODIFIER: Mafia cu SEER vede rolul victimei (chiar dacă a supraviețuit)
@@ -1073,6 +1131,9 @@ function processVotes(roomCode) {
         room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== eliminated.id);
         room.gameState.deadPlayers.push(eliminated);
         
+        // Trimite spectator mode către jucătorul eliminat
+        enableSpectatorMode(eliminated.id, room);
+        
         io.to(roomCode).emit('player-eliminated', {
             player: {
                 name: eliminated.name,
@@ -1086,12 +1147,35 @@ function processVotes(roomCode) {
             return;
         }
         
-        // Următoarea rundă
-        setTimeout(() => {
-            room.gameState.round++;
-            startNightPhase(roomCode);
-        }, 5000);
+        // Notifică host-ul că poate continua la următoarea rundă
+        const narrator = room.players.find(p => p.role === 'NARRATOR');
+        if (narrator) {
+            io.to(narrator.id).emit('ready-for-next-round', { 
+                message: 'Votul s-a încheiat. Poți începe următoarea rundă.' 
+            });
+        }
     }
+}
+
+// Activează modul spectator pentru jucători morți
+function enableSpectatorMode(playerId, room) {
+    const player = room.players.find(p => p.id === playerId);
+    if (!player) return;
+    
+    // Trimite toate informațiile spectatorului (același lucru pe care îl vede narrator-ul)
+    io.to(playerId).emit('enter-spectator-mode', {
+        message: 'Ai fost eliminat! Acum ești spectator și poți vedea toate rolurile.',
+        allRoles: room.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            modifier: p.modifier,
+            hitCount: p.hitCount,
+            alive: p.alive
+        }))
+    });
+    
+    console.log(`👁️ ${player.name} a intrat în modul spectator`);
 }
 
 // Verifică condiția de victorie + TRAITOR activation

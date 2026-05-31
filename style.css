@@ -1712,3 +1712,251 @@ body {
     margin: 10px;
     min-width: 150px;
 }
+
+/* ====== ROLE REVEAL OVERLAY CU COUNTDOWN ====== */
+.role-reveal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, rgba(15, 15, 30, 0.98) 0%, rgba(26, 26, 46, 0.98) 100%);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.role-reveal-box {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(26, 26, 46, 0.9) 100%);
+    padding: 60px 80px;
+    border-radius: 25px;
+    box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.2);
+    text-align: center;
+    max-width: 600px;
+    border: 3px solid rgba(255, 215, 0, 0.3);
+    animation: scaleIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes scaleIn {
+    0% {
+        transform: scale(0.5) rotate(-5deg);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+.countdown-timer {
+    position: absolute;
+    top: 40px;
+    right: 40px;
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff3333 100%);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 5px 20px rgba(255, 51, 51, 0.5), inset 0 2px 5px rgba(255, 255, 255, 0.3);
+    border: 4px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.15);
+    }
+}
+
+.role-reveal-icon {
+    font-size: 8rem;
+    margin-bottom: 20px;
+    animation: bounceIn 0.8s ease-out;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+}
+
+@keyframes bounceIn {
+    0% {
+        transform: translateY(-100px);
+        opacity: 0;
+    }
+    60% {
+        transform: translateY(20px);
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.role-reveal-name {
+    font-size: 3.5rem;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);
+    font-weight: 900;
+    letter-spacing: 2px;
+}
+
+.role-reveal-description {
+    font-size: 1.3rem;
+    color: var(--text-secondary);
+    margin-bottom: 25px;
+    line-height: 1.6;
+}
+
+.modifier-reveal {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 215, 0, 0.05) 100%);
+    border: 2px solid rgba(255, 215, 0, 0.3);
+    border-radius: 15px;
+    padding: 25px;
+    margin: 30px 0;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+}
+
+.modifier-icon {
+    font-size: 4rem;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 5px 10px rgba(255, 215, 0, 0.4));
+}
+
+.modifier-name {
+    font-size: 2rem;
+    color: #ffd700;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.modifier-description {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.role-reveal-instruction {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin-top: 25px;
+    font-style: italic;
+}
+
+/* ====== HOST PHASE CONTROL (Butoane de control manual) ====== */
+.host-phase-control {
+    background: linear-gradient(135deg, rgba(51, 153, 255, 0.1) 0%, rgba(51, 153, 255, 0.05) 100%);
+    border: 2px solid rgba(51, 153, 255, 0.3);
+    border-radius: 15px;
+    padding: 25px;
+    margin: 25px 0;
+    text-align: center;
+    animation: slideInDown 0.5s ease-out;
+}
+
+@keyframes slideInDown {
+    0% {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.host-control-message {
+    margin-bottom: 20px;
+}
+
+.host-control-message p {
+    font-size: 1.2rem;
+    color: var(--detective-color);
+    font-weight: 600;
+}
+
+.host-action-btn {
+    background: linear-gradient(135deg, var(--detective-color) 0%, #2980ff 100%);
+    color: white;
+    font-size: 1.3rem;
+    padding: 18px 40px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(51, 153, 255, 0.4);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.host-action-btn:hover {
+    background: linear-gradient(135deg, #2980ff 0%, var(--detective-color) 100%);
+    box-shadow: 0 8px 30px rgba(51, 153, 255, 0.6);
+    transform: translateY(-3px);
+}
+
+.host-action-btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 15px rgba(51, 153, 255, 0.4);
+}
+
+/* ====== MODERNIZARE UI GENERALĂ ====== */
+.narrator-player-item {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+}
+
+.narrator-player-item:hover {
+    background: var(--bg-card-hover);
+    border-left-color: var(--day-color);
+    transform: translateX(5px);
+}
+
+.narrator-player-item.dead {
+    opacity: 0.6;
+    filter: grayscale(50%);
+}
+
+/* Responsive pentru Role Reveal */
+@media (max-width: 600px) {
+    .role-reveal-box {
+        padding: 40px 30px;
+        max-width: 90vw;
+    }
+    
+    .role-reveal-icon {
+        font-size: 5rem;
+    }
+    
+    .role-reveal-name {
+        font-size: 2.5rem;
+    }
+    
+    .countdown-timer {
+        width: 60px;
+        height: 60px;
+        font-size: 2rem;
+        top: 20px;
+        right: 20px;
+    }
+    
+    .host-phase-control {
+        padding: 15px;
+    }
+    
+    .host-action-btn {
+        font-size: 1.1rem;
+        padding: 15px 25px;
+    }
+}

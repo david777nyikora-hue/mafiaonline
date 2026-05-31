@@ -250,6 +250,7 @@ function setupSocketListeners() {
     // Joc început
     socket.on('game-started', (data) => {
         myRole = data.role;
+        const myModifier = data.modifier; // Primim modifier-ul nostru
         currentPlayers = data.players;
         
         // Salvează roomCode și myName pentru reconnect
@@ -276,7 +277,8 @@ function setupSocketListeners() {
             allRoles = data.allRoles;
         }
         
-        showMyRole();
+        // Afișează Role Reveal Screen cu countdown de 10 secunde
+        showRoleRevealWithCountdown(myRole, myModifier);
     });
     
     // Restart game
@@ -454,6 +456,42 @@ function setupSocketListeners() {
             showNotification(data.message, 'info', 5000);
             logNarratorModifierEvent(data.message, 'info');
         }
+    });
+    
+    // === HOST MANUAL CONTROL EVENTS ===
+    
+    // Host poate începe noaptea după role reveal
+    socket.on('ready-for-night', (data) => {
+        if (myRole === 'NARRATOR') {
+            showHostControlButton('start-night', 'Începe Noaptea', data.message);
+        }
+    });
+    
+    // Host poate începe ziua după acțiuni noapte
+    socket.on('ready-for-day', (data) => {
+        if (myRole === 'NARRATOR') {
+            showHostControlButton('start-day', 'Începe Ziua', data.message);
+        }
+    });
+    
+    // Host poate începe următoarea rundă după voturi
+    socket.on('ready-for-next-round', (data) => {
+        if (myRole === 'NARRATOR') {
+            showHostControlButton('next-round', 'Următoarea Rundă', data.message);
+        }
+    });
+    
+    // === SPECTATOR MODE EVENT ===
+    
+    // Jucător mort devine spectator
+    socket.on('enter-spectator-mode', (data) => {
+        showNotification(data.message, 'info', 8000);
+        
+        // Actualizează variabila globală allRoles cu informații complete
+        allRoles = data.allRoles;
+        
+        // Afișează ecranul de spectator
+        showSpectatorScreen();
     });
     
     // Disconnect/Reconnect events
@@ -712,6 +750,92 @@ function startGame() {
     socket.emit('start-game');
 }
 
+// ====== AFIȘARE ROL CU COUNTDOWN (10 SECUNDE) ======
+function showRoleRevealWithCountdown(role, modifier) {
+    // Dacă ești Narrator (host), arată direct ecranul special
+    if (role === 'NARRATOR') {
+        showNarratorScreen();
+        return;
+    }
+    
+    const roleInfo = ROLES[role];
+    
+    // Creează overlay pentru role reveal cu countdown
+    const overlay = document.createElement('div');
+    overlay.id = 'role-reveal-overlay';
+    overlay.className = 'role-reveal-overlay';
+    
+    // Informații modifier
+    let modifierInfo = '';
+    if (modifier && modifier !== 'TRAITOR' && modifier !== 'TIEBREAKER') {
+        // Doar HEALER și SEER sunt vizibile pentru jucător de la început
+        // TRAITOR și TIEBREAKER sunt secrete până la activare
+        const modifierIcons = {
+            'HEALER': '🛡️',
+            'SEER': '👁️'
+        };
+        const modifierNames = {
+            'HEALER': 'Healer',
+            'SEER': 'Seer'
+        };
+        const modifierDescriptions = {
+            'HEALER': 'Supraviețuiești primul kill - ai două vieți!',
+            'SEER': 'Vezi rolul exact al țintei când acționezi asupra ei!'
+        };
+        
+        if (modifierIcons[modifier]) {
+            modifierInfo = `
+                <div class="modifier-reveal">
+                    <div class="modifier-icon">${modifierIcons[modifier]}</div>
+                    <h3 class="modifier-name">${modifierNames[modifier]}</h3>
+                    <p class="modifier-description">${modifierDescriptions[modifier]}</p>
+                </div>
+            `;
+        }
+    }
+    
+    overlay.innerHTML = `
+        <div class="role-reveal-box">
+            <div class="countdown-timer" id="countdown-timer">10</div>
+            <div class="role-reveal-icon">${roleInfo.icon}</div>
+            <h1 class="role-reveal-name">${roleInfo.name}</h1>
+            <p class="role-reveal-description">${roleInfo.description}</p>
+            ${modifierInfo}
+            <p class="role-reveal-instruction">🔒 Păstrează-ți rolul secret!</p>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Countdown de 10 secunde
+    let timeLeft = 10;
+    const countdownEl = document.getElementById('countdown-timer');
+    
+    const countdownInterval = setInterval(() => {
+        timeLeft--;
+        if (countdownEl) {
+            countdownEl.textContent = timeLeft;
+            
+            // Animație pulsare la ultimele 3 secunde
+            if (timeLeft <= 3) {
+                countdownEl.style.animation = 'pulse 0.5s infinite';
+            }
+        }
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            
+            // Șterge overlay-ul
+            if (overlay && overlay.parentNode) {
+                overlay.remove();
+            }
+            
+            // Afișează ecranul de rol normal
+            showMyRole();
+        }
+    }, 1000);
+}
+
 // ====== AFIȘARE ROL ======
 function showMyRole() {
     // Dacă ești Narrator (host), arată ecranul special
@@ -832,6 +956,120 @@ function showNarratorScreen() {
             location.reload();
         }
     });
+}
+
+// ====== HOST CONTROL BUTTONS (Manual Phase Progression) ======
+function showHostControlButton(action, buttonText, message) {
+    // Verifică dacă există deja un container de control
+    let controlContainer = document.getElementById('host-phase-control');
+    
+    if (!controlContainer) {
+        // Creează container pentru butoane de control
+        controlContainer = document.createElement('div');
+        controlContainer.id = 'host-phase-control';
+        controlContainer.className = 'host-phase-control';
+        
+        // Adaugă în ecranul narrator
+        const narratorContainer = document.querySelector('.narrator-container');
+        if (narratorContainer) {
+            narratorContainer.insertBefore(controlContainer, narratorContainer.querySelector('.narrator-controls'));
+        }
+    }
+    
+    // Actualizează conținutul
+    controlContainer.innerHTML = `
+        <div class="host-control-message">
+            <p>✅ ${message}</p>
+        </div>
+        <button id="host-action-btn" class="btn btn-primary host-action-btn">${buttonText}</button>
+    `;
+    
+    // Adaugă event listener pentru buton
+    const actionBtn = document.getElementById('host-action-btn');
+    if (actionBtn) {
+        actionBtn.addEventListener('click', () => {
+            if (action === 'start-night') {
+                socket.emit('host-start-night');
+                controlContainer.remove();
+            } else if (action === 'start-day') {
+                socket.emit('host-start-day');
+                controlContainer.remove();
+            } else if (action === 'next-round') {
+                socket.emit('host-start-night'); // Următoarea rundă = start night
+                controlContainer.remove();
+            }
+        });
+    }
+}
+
+// ====== SPECTATOR SCREEN (Pentru jucători morți) ======
+function showSpectatorScreen() {
+    switchScreen('narrator-screen'); // Folosim același ecran ca narrator
+    
+    // Actualizează header-ul pentru spectator
+    const narratorHeader = document.querySelector('.narrator-header h1');
+    const narratorSubtitle = document.querySelector('.narrator-header .subtitle');
+    
+    if (narratorHeader) {
+        narratorHeader.textContent = '👁️ SPECTATOR';
+    }
+    
+    if (narratorSubtitle) {
+        narratorSubtitle.textContent = 'Ai fost eliminat - acum poți vedea tot!';
+    }
+    
+    // Ascunde butoanele de control (spectatorii nu pot controla jocul)
+    const narratorControls = document.querySelector('.narrator-controls');
+    if (narratorControls) {
+        narratorControls.style.display = 'none';
+    }
+    
+    const hostPhaseControl = document.getElementById('host-phase-control');
+    if (hostPhaseControl) {
+        hostPhaseControl.style.display = 'none';
+    }
+    
+    // Populează lista de jucători cu roluri + modifiers (același ca narrator)
+    const playersList = document.getElementById('narrator-players-list');
+    if (playersList) {
+        playersList.innerHTML = '';
+        
+        allRoles.forEach(player => {
+            const roleInfo = ROLES[player.role] || { icon: '❓', name: player.role };
+            const playerItem = document.createElement('div');
+            playerItem.className = `narrator-player-item ${player.alive ? 'alive' : 'dead'}`;
+            
+            // Modifier display
+            let modifierBadge = '';
+            if (player.modifier) {
+                const modifierIcons = {
+                    'TRAITOR': '🎭',
+                    'HEALER': '🛡️',
+                    'SEER': '👁️',
+                    'TIEBREAKER': '⚖️'
+                };
+                const modifierNames = {
+                    'TRAITOR': 'Traitor',
+                    'HEALER': 'Healer',
+                    'SEER': 'Seer',
+                    'TIEBREAKER': 'Tiebreaker'
+                };
+                
+                let extraInfo = '';
+                if (player.modifier === 'HEALER' && player.hitCount > 0) {
+                    extraInfo = ` (${player.hitCount}/2 lovituri)`;
+                }
+                
+                modifierBadge = `<span class="modifier-badge" style="font-size: 0.8rem; color: #ffd700; margin-left: 8px;">${modifierIcons[player.modifier]} ${modifierNames[player.modifier]}${extraInfo}</span>`;
+            }
+            
+            playerItem.innerHTML = `
+                <span class="player-name">${player.alive ? '✅' : '💀'} ${player.name}</span>
+                <span class="player-role ${ROLES[player.role]?.class || ''}">${roleInfo.icon} ${roleInfo.name}${modifierBadge}</span>
+            `;
+            playersList.appendChild(playerItem);
+        });
+    }
 }
 
 function updateNarratorActions(data) {
