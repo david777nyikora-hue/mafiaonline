@@ -311,6 +311,41 @@ function setupSocketListeners() {
         startDayPhase(data);
     });
     
+    // === DISCUSSION TIMER (30 secunde) ===
+    socket.on('discussion-started', (data) => {
+        showDiscussionTimer(data.duration);
+    });
+    
+    // === VOTING PHASE ===
+    socket.on('voting-started', (data) => {
+        startVotingPhase(data);
+    });
+    
+    // === SWAPPER MODIFIER EVENTS ===
+    socket.on('swapper-revealed', (data) => {
+        showNotification('🔄 ' + data.message, 'warning', 8000);
+        console.log('🔄 SWAPPER modifier revealed');
+    });
+    
+    socket.on('swapper-vote-update', (data) => {
+        // Swapper vede voturile live
+        updateSwapperLiveVotes(data);
+    });
+    
+    socket.on('swapper-action-time', (data) => {
+        // Toți au votat, Swapper poate face swap
+        showSwapperSwapInterface(data);
+    });
+    
+    socket.on('swapper-swap-confirmed', (data) => {
+        showNotification('✅ ' + data.message, 'success', 5000);
+    });
+    
+    socket.on('swapper-vote-now', (data) => {
+        // După swap, Swapper votează
+        showSwapperVotingInterface();
+    });
+    
     // Vot înregistrat
     socket.on('vote-cast', (data) => {
         updateVoteDisplay(data);
@@ -767,9 +802,9 @@ function showRoleRevealWithCountdown(role, modifier) {
     
     // Informații modifier
     let modifierInfo = '';
-    if (modifier && modifier !== 'TRAITOR' && modifier !== 'TIEBREAKER') {
+    if (modifier && modifier !== 'TRAITOR' && modifier !== 'TIEBREAKER' && modifier !== 'SWAPPER') {
         // Doar HEALER și SEER sunt vizibile pentru jucător de la început
-        // TRAITOR și TIEBREAKER sunt secrete până la activare
+        // TRAITOR, TIEBREAKER și SWAPPER sunt secrete până la activare
         const modifierIcons = {
             'HEALER': '🛡️',
             'SEER': '👁️'
@@ -918,13 +953,15 @@ function showNarratorScreen() {
                 'TRAITOR': '🎭',
                 'HEALER': '🛡️',
                 'SEER': '👁️',
-                'TIEBREAKER': '⚖️'
+                'TIEBREAKER': '⚖️',
+                'SWAPPER': '🔄'
             };
             const modifierNames = {
                 'TRAITOR': 'Traitor',
                 'HEALER': 'Healer',
                 'SEER': 'Seer',
-                'TIEBREAKER': 'Tiebreaker'
+                'TIEBREAKER': 'Tiebreaker',
+                'SWAPPER': 'Swapper'
             };
             
             let extraInfo = '';
@@ -1766,3 +1803,274 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// ====== DISCUSSION TIMER (30 SECUNDE) ======
+function showDiscussionTimer(duration) {
+    // Creează overlay pentru discussion timer
+    const overlay = document.createElement('div');
+    overlay.id = 'discussion-timer-overlay';
+    overlay.className = 'discussion-timer-overlay';
+    
+    let timeLeft = Math.floor(duration / 1000); // Convert to seconds
+    
+    overlay.innerHTML = `
+        <div class="discussion-timer-box">
+            <div class="discussion-icon">💬</div>
+            <h2 class="discussion-title">Fază de Discuții</h2>
+            <p class="discussion-instruction">Discutați despre ce s-a întâmplat în timpul nopții</p>
+            <div class="discussion-countdown" id="discussion-countdown">${timeLeft}</div>
+            <p class="discussion-note">Votarea va începe automat după ${timeLeft} secunde</p>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Countdown
+    const countdownEl = document.getElementById('discussion-countdown');
+    const countdownInterval = setInterval(() => {
+        timeLeft--;
+        if (countdownEl) {
+            countdownEl.textContent = timeLeft;
+            
+            // Animație pulsare la ultimele 5 secunde
+            if (timeLeft <= 5) {
+                countdownEl.style.animation = 'pulse 0.5s infinite';
+                countdownEl.style.color = '#ff3333';
+            }
+        }
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            
+            // Șterge overlay-ul
+            if (overlay && overlay.parentNode) {
+                overlay.remove();
+            }
+        }
+    }, 1000);
+}
+
+// ====== VOTING PHASE ======
+let swapperLiveVotes = {}; // Track votes pentru Swapper
+let isSwapper = false;
+
+function startVotingPhase(data) {
+    // Verifică dacă ești Swapper
+    const player = currentPlayers.find(p => p.id === socket.id);
+    
+    if (!data.hasSwapper) {
+        // Fără Swapper - voting normal
+        showNormalVotingInterface(data.alivePlayers);
+    } else {
+        // Cu Swapper în joc
+        // Swapper va primi swapper-revealed event separat
+        // Ceilalți jucători votează normal
+        showNormalVotingInterface(data.alivePlayers);
+    }
+}
+
+function showNormalVotingInterface(alivePlayers) {
+    switchScreen('day-screen');
+    
+    const nightResults = document.getElementById('night-results');
+    if (nightResults) {
+        // Rezultatele au fost deja afișate în startDayPhase
+    }
+    
+    renderVotingPlayers(alivePlayers);
+}
+
+// ====== SWAPPER LIVE VOTE TRACKING ======
+function updateSwapperLiveVotes(data) {
+    isSwapper = true;
+    
+    // Salvează votul
+    swapperLiveVotes[data.voterId] = {
+        voterName: data.voterName,
+        targetId: data.targetId,
+        targetName: data.targetName
+    };
+    
+    // Update UI dacă există swapper live tracker
+    const liveTracker = document.getElementById('swapper-live-tracker');
+    if (liveTracker) {
+        updateSwapperLiveTrackerUI();
+    } else {
+        // Creează live tracker dacă nu există
+        createSwapperLiveTracker();
+    }
+}
+
+function createSwapperLiveTracker() {
+    const dayScreen = document.getElementById('day-screen');
+    if (!dayScreen) return;
+    
+    // Creează container pentru live tracker
+    const trackerContainer = document.createElement('div');
+    trackerContainer.id = 'swapper-live-tracker-container';
+    trackerContainer.className = 'swapper-live-tracker-container';
+    trackerContainer.innerHTML = `
+        <div class="swapper-header">
+            <h2>🔄 SWAPPER - Live Vote Tracker</h2>
+            <p class="instruction">Vezi în timp real cine pe cine votează</p>
+        </div>
+        <div id="swapper-live-tracker" class="swapper-live-tracker">
+            <p class="instruction">Așteptăm voturi...</p>
+        </div>
+    `;
+    
+    // Inserează înaintea voting section
+    const votingSection = dayScreen.querySelector('.voting-section');
+    if (votingSection) {
+        dayScreen.insertBefore(trackerContainer, votingSection);
+    }
+    
+    updateSwapperLiveTrackerUI();
+}
+
+function updateSwapperLiveTrackerUI() {
+    const liveTracker = document.getElementById('swapper-live-tracker');
+    if (!liveTracker) return;
+    
+    if (Object.keys(swapperLiveVotes).length === 0) {
+        liveTracker.innerHTML = '<p class="instruction">Așteptăm voturi...</p>';
+        return;
+    }
+    
+    liveTracker.innerHTML = '';
+    
+    Object.entries(swapperLiveVotes).forEach(([voterId, voteData]) => {
+        const voteItem = document.createElement('div');
+        voteItem.className = 'swapper-vote-item';
+        voteItem.dataset.voterId = voterId;
+        voteItem.innerHTML = `
+            <span class="voter-name">👤 ${voteData.voterName}</span>
+            <span class="vote-arrow">→</span>
+            <span class="target-name">🎯 ${voteData.targetName}</span>
+        `;
+        liveTracker.appendChild(voteItem);
+    });
+}
+
+// ====== SWAPPER SWAP INTERFACE ======
+function showSwapperSwapInterface(data) {
+    const dayScreen = document.getElementById('day-screen');
+    if (!dayScreen) return;
+    
+    // Ascunde tracker-ul live
+    const trackerContainer = document.getElementById('swapper-live-tracker-container');
+    if (trackerContainer) {
+        trackerContainer.style.display = 'none';
+    }
+    
+    // Creează interfață de swap
+    const swapContainer = document.createElement('div');
+    swapContainer.id = 'swapper-swap-container';
+    swapContainer.className = 'swapper-swap-container';
+    
+    swapContainer.innerHTML = `
+        <div class="swapper-swap-box">
+            <h2>🔄 Modifică un Vot</h2>
+            <p class="instruction">${data.message}</p>
+            
+            <div class="swapper-swap-section">
+                <h3>1. Selectează votul pe care vrei să-l modifici:</h3>
+                <div id="swapper-vote-list" class="swapper-vote-list">
+                    ${Object.entries(swapperLiveVotes).map(([voterId, voteData]) => `
+                        <div class="swapper-vote-select-item" data-voter-id="${voterId}">
+                            <span>${voteData.voterName} → ${voteData.targetName}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div class="swapper-swap-section" id="swapper-target-selection" style="display: none;">
+                <h3>2. Selectează noua țintă:</h3>
+                <div id="swapper-new-target-list" class="swapper-vote-list">
+                    <!-- Se populează dinamic -->
+                </div>
+            </div>
+            
+            <div class="swapper-buttons">
+                <button id="swapper-skip-btn" class="btn btn-secondary">Sari (Nu modific)</button>
+                <button id="swapper-confirm-swap-btn" class="btn btn-primary" disabled>Confirmă Swap</button>
+            </div>
+        </div>
+    `;
+    
+    dayScreen.appendChild(swapContainer);
+    
+    // Event listeners pentru swap
+    let selectedVoterId = null;
+    let selectedNewTargetId = null;
+    
+    // Selectare vot de modificat
+    document.querySelectorAll('.swapper-vote-select-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.swapper-vote-select-item').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedVoterId = item.dataset.voterId;
+            
+            // Arată secțiunea de selectare țintă nouă
+            const targetSection = document.getElementById('swapper-target-selection');
+            const newTargetList = document.getElementById('swapper-new-target-list');
+            
+            if (targetSection && newTargetList) {
+                targetSection.style.display = 'block';
+                
+                // Populează țintele posibile (toți jucătorii vii)
+                newTargetList.innerHTML = '';
+                currentPlayers.filter(p => p.alive).forEach(player => {
+                    const targetItem = document.createElement('div');
+                    targetItem.className = 'swapper-vote-select-item';
+                    targetItem.dataset.targetId = player.id;
+                    targetItem.innerHTML = `<span>🎯 ${player.name}</span>`;
+                    
+                    targetItem.addEventListener('click', () => {
+                        document.querySelectorAll('#swapper-new-target-list .swapper-vote-select-item').forEach(i => i.classList.remove('selected'));
+                        targetItem.classList.add('selected');
+                        selectedNewTargetId = player.id;
+                        
+                        // Activează butonul de confirm
+                        document.getElementById('swapper-confirm-swap-btn').disabled = false;
+                    });
+                    
+                    newTargetList.appendChild(targetItem);
+                });
+            }
+        });
+    });
+    
+    // Buton Skip
+    document.getElementById('swapper-skip-btn').addEventListener('click', () => {
+        // Fără swap, direct la vot
+        swapContainer.remove();
+        showSwapperVotingInterface();
+    });
+    
+    // Buton Confirm Swap
+    document.getElementById('swapper-confirm-swap-btn').addEventListener('click', () => {
+        if (selectedVoterId && selectedNewTargetId) {
+            // Trimite swap la server
+            socket.emit('swapper-swap-vote', {
+                originalVoterId: selectedVoterId,
+                newTargetId: selectedNewTargetId
+            });
+            
+            // Șterge interfața
+            swapContainer.remove();
+            
+            // Așteaptă confirmarea și apoi votează
+            // showSwapperVotingInterface() va fi apelat de swapper-vote-now event
+        }
+    });
+}
+
+// ====== SWAPPER VOTING INTERFACE ======
+function showSwapperVotingInterface() {
+    showNotification('Acum votează și tu!', 'info', 3000);
+    
+    // Afișează interfața normală de vot
+    const alivePlayers = currentPlayers.filter(p => p.alive);
+    renderVotingPlayers(alivePlayers);
+}

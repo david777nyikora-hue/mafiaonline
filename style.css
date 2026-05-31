@@ -1960,3 +1960,288 @@ body {
         padding: 15px 25px;
     }
 }
+
+/* ====== DISCUSSION TIMER OVERLAY ====== */
+.discussion-timer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, rgba(15, 15, 30, 0.95) 0%, rgba(26, 26, 46, 0.95) 100%);
+    backdrop-filter: blur(15px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.discussion-timer-box {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(26, 26, 46, 0.9) 100%);
+    padding: 60px 80px;
+    border-radius: 25px;
+    box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.2);
+    text-align: center;
+    max-width: 600px;
+    border: 3px solid rgba(51, 153, 255, 0.3);
+    animation: scaleIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.discussion-icon {
+    font-size: 6rem;
+    margin-bottom: 20px;
+    animation: bounceIn 1s ease-out;
+}
+
+.discussion-title {
+    font-size: 2.5rem;
+    color: var(--detective-color);
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(51, 153, 255, 0.5);
+}
+
+.discussion-instruction {
+    font-size: 1.3rem;
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+}
+
+.discussion-countdown {
+    font-size: 5rem;
+    font-weight: bold;
+    color: #ffd700;
+    margin: 30px 0;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    animation: pulse 1s infinite;
+}
+
+.discussion-note {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ====== SWAPPER LIVE VOTE TRACKER ====== */
+.swapper-live-tracker-container {
+    background: linear-gradient(135deg, rgba(255, 153, 51, 0.1) 0%, rgba(255, 153, 51, 0.05) 100%);
+    padding: 25px;
+    border-radius: 15px;
+    margin: 20px 0;
+    border: 2px solid rgba(255, 153, 51, 0.3);
+    box-shadow: 0 5px 20px rgba(255, 153, 51, 0.2);
+}
+
+.swapper-header h2 {
+    color: #ff9933;
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 10px;
+    text-shadow: 0 0 15px rgba(255, 153, 51, 0.5);
+}
+
+.swapper-header .instruction {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.swapper-live-tracker {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 10px;
+    min-height: 100px;
+}
+
+.swapper-vote-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 153, 51, 0.1);
+    padding: 15px 20px;
+    margin: 10px 0;
+    border-radius: 10px;
+    border-left: 4px solid #ff9933;
+    animation: slideInRight 0.3s ease-out;
+    transition: all 0.3s ease;
+}
+
+.swapper-vote-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(255, 153, 51, 0.3);
+}
+
+.voter-name {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.vote-arrow {
+    font-size: 1.5rem;
+    color: #ff9933;
+}
+
+.target-name {
+    font-weight: bold;
+    color: var(--detective-color);
+}
+
+/* ====== SWAPPER SWAP INTERFACE ====== */
+.swapper-swap-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 10000;
+    animation: scaleIn 0.4s ease-out;
+}
+
+.swapper-swap-box {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(26, 26, 46, 0.95) 100%);
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 80px rgba(0, 0, 0, 0.9), 0 0 40px rgba(255, 153, 51, 0.3);
+    border: 3px solid rgba(255, 153, 51, 0.4);
+}
+
+.swapper-swap-box h2 {
+    color: #ff9933;
+    text-align: center;
+    font-size: 2.2rem;
+    margin-bottom: 15px;
+    text-shadow: 0 0 20px rgba(255, 153, 51, 0.5);
+}
+
+.swapper-swap-box > .instruction {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    font-size: 1.1rem;
+}
+
+.swapper-swap-section {
+    margin: 25px 0;
+    padding: 20px;
+    background: rgba(255, 153, 51, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 153, 51, 0.2);
+}
+
+.swapper-swap-section h3 {
+    color: var(--text-primary);
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+}
+
+.swapper-vote-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.swapper-vote-select-item {
+    background: var(--bg-card-hover);
+    padding: 15px 20px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.swapper-vote-select-item:hover {
+    background: rgba(255, 153, 51, 0.2);
+    border-color: #ff9933;
+    transform: translateX(5px);
+}
+
+.swapper-vote-select-item.selected {
+    background: linear-gradient(135deg, rgba(255, 153, 51, 0.3) 0%, rgba(255, 153, 51, 0.2) 100%);
+    border-color: #ff9933;
+    box-shadow: 0 0 20px rgba(255, 153, 51, 0.4);
+    transform: scale(1.05);
+}
+
+.swapper-vote-select-item span {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.swapper-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+    justify-content: center;
+}
+
+.swapper-buttons .btn {
+    flex: 1;
+    padding: 15px 30px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.swapper-buttons .btn-secondary {
+    background: linear-gradient(135deg, #555 0%, #333 100%);
+    color: white;
+}
+
+.swapper-buttons .btn-secondary:hover {
+    background: linear-gradient(135deg, #666 0%, #444 100%);
+    box-shadow: 0 5px 20px rgba(255, 255, 255, 0.2);
+}
+
+.swapper-buttons .btn-primary {
+    background: linear-gradient(135deg, #ff9933 0%, #ff7700 100%);
+    color: white;
+}
+
+.swapper-buttons .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ffaa44 0%, #ff8800 100%);
+    box-shadow: 0 5px 20px rgba(255, 153, 51, 0.5);
+    transform: translateY(-2px);
+}
+
+.swapper-buttons .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ====== RESPONSIVE SWAPPER UI ====== */
+@media (max-width: 768px) {
+    .swapper-swap-container {
+        width: 95%;
+    }
+    
+    .swapper-swap-box {
+        padding: 25px;
+    }
+    
+    .swapper-swap-box h2 {
+        font-size: 1.8rem;
+    }
+    
+    .swapper-buttons {
+        flex-direction: column;
+    }
+    
+    .discussion-timer-box {
+        padding: 40px 30px;
+    }
+    
+    .discussion-title {
+        font-size: 2rem;
+    }
+    
+    .discussion-countdown {
+        font-size: 4rem;
+    }
+}

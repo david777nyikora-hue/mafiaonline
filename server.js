@@ -86,7 +86,7 @@ function assignRoles(players, roleConfig) {
 function assignModifiers(players, modifierConfig) {
     const playersWithoutHost = players.filter(p => !p.isHost && p.alive);
     
-    const modifiers = ['TRAITOR', 'HEALER', 'SEER', 'TIEBREAKER'];
+    const modifiers = ['TRAITOR', 'HEALER', 'SEER', 'TIEBREAKER', 'SWAPPER'];
     const availablePlayers = [...playersWithoutHost];
     
     modifiers.forEach(modifier => {
@@ -102,6 +102,8 @@ function assignModifiers(players, modifierConfig) {
             
             // SEER: Nu poate fi DETECTIVE
             if (modifier === 'SEER' && p.role === 'DETECTIVE') return false;
+            
+            // SWAPPER: Poate fi orice rol (10% șansă universală)
             
             // Verifică șansele per rol
             const roleChance = config.roleChances?.[p.role] || 50;
@@ -148,7 +150,8 @@ io.on('connection', (socket) => {
                         traitor: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } },
                         healer: { count: 0, roleChances: { DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } },
                         seer: { count: 0, roleChances: { MAFIA: 50, DOCTOR: 50, CITIZEN: 50 } },
-                        tiebreaker: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 90, DETECTIVE: 90, CITIZEN: 90 } }
+                        tiebreaker: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 90, DETECTIVE: 90, CITIZEN: 90 } },
+                        swapper: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 10, DETECTIVE: 10, CITIZEN: 10 } }
                     }
                 },
                 nightActions: {},
@@ -443,30 +446,112 @@ io.on('connection', (socket) => {
         }
         
         const { targetId } = data;
-        room.gameState.votes[socket.id] = targetId;
         
-        // Broadcast votul (fără a dezvălui cine a votat)
-        io.to(roomCode).emit('vote-cast', {
-            voterId: socket.id,
-            targetId: targetId
-        });
+        // Verifică dacă există Swapper și dacă votul vine de la Swapper
+        const isSwapper = player.modifier === 'SWAPPER';
         
-        // Trimite update la narrator
-        const narrator = room.players.find(p => p.role === 'NARRATOR');
-        if (narrator) {
-            io.to(narrator.id).emit('narrator-vote-update', {
-                votes: room.gameState.votes,
-                players: room.players
-            });
-        }
-        
-        // Verifică dacă toți au votat (exclude narrator)
-        const aliveCount = room.gameState.alivePlayers.length;
-        const voteCount = Object.keys(room.gameState.votes).length;
-        
-        if (voteCount === aliveCount) {
+        if (isSwapper) {
+            // Swapper votează DUPĂ ce face swap-ul (sau decide să nu facă)
+            room.gameState.votes[socket.id] = targetId;
+            
+            console.log(`🔄 SWAPPER ${player.name} a votat: ${targetId}`);
+            
+            // Procesează voturile finale
             processVotes(roomCode);
+        } else {
+            // Votul normal (nu de la Swapper)
+            room.gameState.votes[socket.id] = targetId;
+            
+            // Dacă există Swapper, trimite-i votul în timp real
+            if (room.gameState.swapperId) {
+                io.to(room.gameState.swapperId).emit('swapper-vote-update', {
+                    voterId: socket.id,
+                    voterName: player.name,
+                    targetId: targetId,
+                    targetName: room.players.find(p => p.id === targetId)?.name
+                });
+            }
+            
+            // Broadcast votul (fără a dezvălui cine a votat pentru jucători normali)
+            io.to(roomCode).emit('vote-cast', {
+                voterId: socket.id,
+                targetId: targetId
+            });
+            
+            // Trimite update la narrator
+            const narrator = room.players.find(p => p.role === 'NARRATOR');
+            if (narrator) {
+                io.to(narrator.id).emit('narrator-vote-update', {
+                    votes: room.gameState.votes,
+                    players: room.players
+                });
+            }
+            
+            // Verifică dacă toți jucătorii normali (fără Swapper) au votat
+            const aliveCount = room.gameState.alivePlayers.length;
+            const swapperExists = room.gameState.swapperId !== undefined;
+            const expectedVotes = swapperExists ? aliveCount - 1 : aliveCount;
+            const voteCount = Object.keys(room.gameState.votes).length;
+            
+            if (voteCount === expectedVotes) {
+                if (swapperExists) {
+                    // Toți au votat EXCEPȚÂND Swapper-ul → Dă-i acces să facă swap
+                    io.to(room.gameState.swapperId).emit('swapper-action-time', {
+                        message: 'Toți jucătorii au votat. Poți modifica un vot sau sări direct la votul tău.',
+                        votes: room.gameState.votes,
+                        players: room.players
+                    });
+                } else {
+                    // Fără Swapper → procesează direct
+                    processVotes(roomCode);
+                }
+            }
         }
+    });
+    
+    // SWAPPER: Modifică votul unui jucător
+    socket.on('swapper-swap-vote', (data) => {
+        const roomCode = socket.roomCode;
+        const room = gameRooms.get(roomCode);
+        
+        if (!room) return;
+        
+        const player = room.players.find(p => p.id === socket.id);
+        
+        // Verifică că e chiar Swapper-ul
+        if (!player || player.modifier !== 'SWAPPER') {
+            return;
+        }
+        
+        const { originalVoterId, newTargetId } = data;
+        
+        // Modifică votul în secret
+        if (room.gameState.votes[originalVoterId]) {
+            const originalTarget = room.gameState.votes[originalVoterId];
+            room.gameState.votes[originalVoterId] = newTargetId;
+            
+            const originalVoter = room.players.find(p => p.id === originalVoterId);
+            const newTarget = room.players.find(p => p.id === newTargetId);
+            
+            console.log(`🔄 SWAPPER: ${originalVoter?.name}'s vote changed to ${newTarget?.name}`);
+            
+            // Notifică doar Swapper-ul și Narrator-ul
+            socket.emit('swapper-swap-confirmed', {
+                message: `Ai modificat votul lui ${originalVoter?.name} către ${newTarget?.name}`
+            });
+            
+            const narrator = room.players.find(p => p.role === 'NARRATOR');
+            if (narrator) {
+                io.to(narrator.id).emit('narrator-notification', {
+                    message: `🔄 SWAPPER a modificat votul lui ${originalVoter?.name} către ${newTarget?.name}`
+                });
+            }
+        }
+        
+        // După swap, cere Swapper-ului să voteze
+        socket.emit('swapper-vote-now', {
+            message: 'Acum votează și tu!'
+        });
     });
     
     // MAFIA CHAT - Trimite mesaj
@@ -1047,11 +1132,12 @@ function startDayPhase(roomCode, victim, saved) {
     const room = gameRooms.get(roomCode);
     if (!room) return;
     
-    room.gameState.phase = 'day';
+    room.gameState.phase = 'discussion';
     room.gameState.votes = {};
     
-    console.log(`☀️ Zi începută în ${roomCode}`);
+    console.log(`☀️ Zi începută în ${roomCode} - Discussion Phase (30s)`);
     
+    // Trimite rezultatele nopții și pornește discussion timer
     io.to(roomCode).emit('day-started', {
         round: room.gameState.round,
         victim: victim ? { name: victim.name } : null,
@@ -1061,6 +1147,50 @@ function startDayPhase(roomCode, victim, saved) {
             name: p.name,
             alive: p.alive
         }))
+    });
+    
+    // Pornește discussion timer de 30 secunde
+    io.to(roomCode).emit('discussion-started', {
+        duration: 30000 // 30 secunde
+    });
+    
+    // După 30 secunde, treci la voting phase
+    setTimeout(() => {
+        startVotingPhase(roomCode);
+    }, 30000);
+}
+
+// Pornește faza de voting (după discussion)
+function startVotingPhase(roomCode) {
+    const room = gameRooms.get(roomCode);
+    if (!room) return;
+    
+    room.gameState.phase = 'voting';
+    room.gameState.votes = {};
+    room.gameState.normalVotesComplete = false;
+    room.gameState.swapperVotes = {}; // Track votes pentru Swapper
+    
+    console.log(`🗳️ Voting Phase începută în ${roomCode}`);
+    
+    // Verifică dacă există Swapper viu
+    const swapper = room.gameState.alivePlayers.find(p => p.modifier === 'SWAPPER');
+    
+    if (swapper) {
+        // Notifică Swapper-ul că are modifier-ul
+        io.to(swapper.id).emit('swapper-revealed', {
+            message: 'Ai modifier-ul SWAPPER! Vei vedea toate voturile și vei putea schimba un vot.'
+        });
+        
+        room.gameState.swapperId = swapper.id;
+    }
+    
+    // Notifică toți jucătorii să înceapă votarea
+    io.to(roomCode).emit('voting-started', {
+        alivePlayers: room.gameState.alivePlayers.map(p => ({
+            id: p.id,
+            name: p.name
+        })),
+        hasSwapper: !!swapper
     });
 }
 
