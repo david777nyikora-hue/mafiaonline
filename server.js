@@ -546,12 +546,18 @@ io.on('connection', (socket) => {
                     message: `🔄 SWAPPER a modificat votul lui ${originalVoter?.name} către ${newTarget?.name}`
                 });
             }
+            
+            // După swap REUȘIT, cere Swapper-ului să voteze
+            socket.emit('swapper-vote-now', {
+                message: 'Acum votează și tu!'
+            });
+        } else {
+            // Votul nu există (eroare) - cere Swapper-ului să voteze oricum
+            console.warn(`⚠️ SWAPPER tried to swap non-existent vote: ${originalVoterId}`);
+            socket.emit('swapper-vote-now', {
+                message: 'Acum votează și tu!'
+            });
         }
-        
-        // După swap, cere Swapper-ului să voteze
-        socket.emit('swapper-vote-now', {
-            message: 'Acum votează și tu!'
-        });
     });
     
     // MAFIA CHAT - Trimite mesaj
@@ -632,6 +638,9 @@ io.on('connection', (socket) => {
         room.gameState.alivePlayers = [];
         room.gameState.deadPlayers = [];
         room.gameState.mafiaChat = [];
+        room.gameState.swapperId = undefined;  // Cleanup Swapper
+        room.gameState.normalVotesComplete = false;
+        room.gameState.swapperVotes = {};
         
         // Resetează rolurile jucătorilor și elimină flag-ul disconnected
         room.players = room.players.map(p => ({
@@ -1367,6 +1376,11 @@ function endGame(roomCode, winner) {
             delete player.disconnectTimeout;
         }
     });
+    
+    // Cleanup Swapper state
+    room.gameState.swapperId = undefined;
+    room.gameState.normalVotesComplete = false;
+    room.gameState.swapperVotes = {};
     
     room.gameState.phase = 'ended';
     

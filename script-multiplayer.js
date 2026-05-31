@@ -289,6 +289,8 @@ function setupSocketListeners() {
         doctorTeam = [];
         detectiveTeam = [];
         allRoles = [];
+        swapperLiveVotes = {};
+        isSwapper = false;
         
         // Revin la lobby
         switchScreen('lobby-screen');
@@ -313,11 +315,18 @@ function setupSocketListeners() {
     
     // === DISCUSSION TIMER (30 secunde) ===
     socket.on('discussion-started', (data) => {
-        showDiscussionTimer(data.duration);
+        // Narrator NU vede discussion timer (rămâne pe ecranul său)
+        if (myRole !== 'NARRATOR') {
+            showDiscussionTimer(data.duration);
+        }
     });
     
     // === VOTING PHASE ===
     socket.on('voting-started', (data) => {
+        // Reset Swapper state la început de voting
+        swapperLiveVotes = {};
+        isSwapper = false;
+        
         startVotingPhase(data);
     });
     
@@ -1806,6 +1815,12 @@ document.head.appendChild(style);
 
 // ====== DISCUSSION TIMER (30 SECUNDE) ======
 function showDiscussionTimer(duration) {
+    // Previne duplicate overlays
+    const existingOverlay = document.getElementById('discussion-timer-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
     // Creează overlay pentru discussion timer
     const overlay = document.createElement('div');
     overlay.id = 'discussion-timer-overlay';
@@ -1855,8 +1870,10 @@ let swapperLiveVotes = {}; // Track votes pentru Swapper
 let isSwapper = false;
 
 function startVotingPhase(data) {
-    // Verifică dacă ești Swapper
-    const player = currentPlayers.find(p => p.id === socket.id);
+    // Narrator nu votează - rămâne pe ecranul său
+    if (myRole === 'NARRATOR') {
+        return;
+    }
     
     if (!data.hasSwapper) {
         // Fără Swapper - voting normal
@@ -2018,9 +2035,9 @@ function showSwapperSwapInterface(data) {
             if (targetSection && newTargetList) {
                 targetSection.style.display = 'block';
                 
-                // Populează țintele posibile (toți jucătorii vii)
+                // Populează țintele posibile (toți jucătorii vii, FĂRĂ Narrator)
                 newTargetList.innerHTML = '';
-                currentPlayers.filter(p => p.alive).forEach(player => {
+                currentPlayers.filter(p => p.alive && p.role !== 'NARRATOR').forEach(player => {
                     const targetItem = document.createElement('div');
                     targetItem.className = 'swapper-vote-select-item';
                     targetItem.dataset.targetId = player.id;
@@ -2070,7 +2087,7 @@ function showSwapperSwapInterface(data) {
 function showSwapperVotingInterface() {
     showNotification('Acum votează și tu!', 'info', 3000);
     
-    // Afișează interfața normală de vot
-    const alivePlayers = currentPlayers.filter(p => p.alive);
+    // Afișează interfața normală de vot (exclude Narrator)
+    const alivePlayers = currentPlayers.filter(p => p.alive && p.role !== 'NARRATOR');
     renderVotingPlayers(alivePlayers);
 }
