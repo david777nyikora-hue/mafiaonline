@@ -70,6 +70,37 @@
                     </div>
                 </div>
                 
+                <div class="role-selection" style="margin-top: 20px;">
+                    <h3>⭐ Configurează Modifiers (Opțional):</h3>
+                    <p class="instruction" style="font-size: 0.9rem; margin-bottom: 15px;">Modifiers sunt abilități secrete care se dau aleatoriu jucătorilor</p>
+                    
+                    <div class="input-group">
+                        <label for="modifier-traitor-count">🎭 Traitor (Devine impostor dacă toți impostorii mor):</label>
+                        <input type="number" id="modifier-traitor-count" min="0" max="2" value="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="modifier-healer-count">🛡️ Healer (Supraviețuiește primul kill):</label>
+                        <input type="number" id="modifier-healer-count" min="0" max="2" value="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="modifier-seer-count">👁️ Seer (Vede rolul țintei când acționează):</label>
+                        <input type="number" id="modifier-seer-count" min="0" max="2" value="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="modifier-tiebreaker-count">⚖️ Tiebreaker (Votul său decide la egalitate):</label>
+                        <input type="number" id="modifier-tiebreaker-count" min="0" max="2" value="0">
+                    </div>
+                    
+                    <div class="roles-total">
+                        <p class="instruction" style="font-size: 0.85rem;">
+                            📋 Restricții: Healer nu poate fi Impostor • Seer nu poate fi Detective
+                        </p>
+                    </div>
+                </div>
+                
                 <button id="confirm-create-btn" class="btn btn-primary">Creează Cameră ca Povestitor</button>
                 <button id="back-to-menu-btn" class="btn btn-secondary">Înapoi</button>
             </div>
@@ -94,7 +125,7 @@
                 
                 <div class="input-group">
                     <label for="room-code">Cod cameră:</label>
-                    <input type="text" id="room-code" placeholder="Introdu codul (ex: ABC123)" maxlength="6" style="text-transform: uppercase;">
+                    <input type="text" id="room-code" placeholder="Introdu codul (ex: A1B2)" maxlength="4" style="text-transform: uppercase;">
                 </div>
                 
                 <button id="confirm-join-btn" class="btn btn-primary">Intră în Joc</button>

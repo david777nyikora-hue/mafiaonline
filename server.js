@@ -14,11 +14,11 @@ app.use(express.static(__dirname));
 // Structura pentru camere de joc
 const gameRooms = new Map();
 
-// Generare cod unic pentru cameră
+// Generare cod unic pentru cameră (4 cifre)
 function generateRoomCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     // Verifică dacă codul există deja
@@ -28,12 +28,12 @@ function generateRoomCode() {
     return code;
 }
 
-// Funcție pentru distribuirea rolurilor
+// Funcție pentru distribuirea rolurilor și modifiers
 function assignRoles(players, roleConfig) {
     // Host-ul nu primește rol - e povestitor
     const playersWithoutHost = players.filter(p => !p.isHost);
     
-    const { mafiaCount, doctorCount, detectiveCount } = roleConfig;
+    const { mafiaCount, doctorCount, detectiveCount, modifierConfig } = roleConfig;
     const citizenCount = playersWithoutHost.length - mafiaCount - doctorCount - detectiveCount;
     
     if (citizenCount < 0) {
@@ -55,19 +55,69 @@ function assignRoles(players, roleConfig) {
     
     // Distribuie roluri
     let roleIndex = 0;
-    return players.map(player => {
+    const playersWithRoles = players.map(player => {
         if (player.isHost) {
             return {
                 ...player,
-                role: 'NARRATOR', // Host = Povestitor
-                alive: false // Nu participă în joc
+                role: 'NARRATOR',
+                alive: false,
+                modifier: null,
+                hitCount: 0 // Pentru Healer modifier
             };
         }
         return {
             ...player,
             role: roles[roleIndex++],
-            alive: true
+            alive: true,
+            modifier: null,
+            hitCount: 0
         };
+    });
+    
+    // Atribuie MODIFIERS
+    if (modifierConfig && modifierConfig.enabled) {
+        assignModifiers(playersWithRoles, modifierConfig);
+    }
+    
+    return playersWithRoles;
+}
+
+// Funcție pentru atribuirea modifiers
+function assignModifiers(players, modifierConfig) {
+    const playersWithoutHost = players.filter(p => !p.isHost && p.alive);
+    
+    const modifiers = ['TRAITOR', 'HEALER', 'SEER', 'TIEBREAKER'];
+    const availablePlayers = [...playersWithoutHost];
+    
+    modifiers.forEach(modifier => {
+        const config = modifierConfig[modifier.toLowerCase()];
+        if (!config || config.count === 0) return;
+        
+        // Calculează jucători eligibili
+        let eligiblePlayers = availablePlayers.filter(p => {
+            if (p.modifier !== null) return false; // Deja are modifier
+            
+            // HEALER: Nu poate fi MAFIA
+            if (modifier === 'HEALER' && p.role === 'MAFIA') return false;
+            
+            // SEER: Nu poate fi DETECTIVE
+            if (modifier === 'SEER' && p.role === 'DETECTIVE') return false;
+            
+            // Verifică șansele per rol
+            const roleChance = config.roleChances?.[p.role] || 50;
+            return Math.random() * 100 < roleChance;
+        });
+        
+        // Shuffle și selectează
+        eligiblePlayers.sort(() => Math.random() - 0.5);
+        const selectedCount = Math.min(config.count, eligiblePlayers.length);
+        
+        for (let i = 0; i < selectedCount; i++) {
+            eligiblePlayers[i].modifier = modifier;
+            // Elimină din availablePlayers
+            const index = availablePlayers.indexOf(eligiblePlayers[i]);
+            if (index > -1) availablePlayers.splice(index, 1);
+        }
     });
 }
 
@@ -92,14 +142,23 @@ io.on('connection', (socket) => {
                 roleConfig: {
                     mafiaCount: data.roleConfig.mafiaCount || 2,
                     doctorCount: data.roleConfig.doctorCount || 1,
-                    detectiveCount: data.roleConfig.detectiveCount || 1
+                    detectiveCount: data.roleConfig.detectiveCount || 1,
+                    modifierConfig: data.roleConfig.modifierConfig || {
+                        enabled: true,
+                        traitor: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } },
+                        healer: { count: 0, roleChances: { DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } },
+                        seer: { count: 0, roleChances: { MAFIA: 50, DOCTOR: 50, CITIZEN: 50 } },
+                        tiebreaker: { count: 0, roleChances: { MAFIA: 10, DOCTOR: 90, DETECTIVE: 90, CITIZEN: 90 } }
+                    }
                 },
                 nightActions: {},
-                teamChoices: {}, // { actionType: { playerId: targetId } }
+                teamChoices: {},
                 votes: {},
+                consensusLocked: {},
                 alivePlayers: [],
                 deadPlayers: [],
-                mafiaChat: [] // Istoric chat Mafia
+                mafiaChat: [],
+                traitorActivated: false // Flag pentru când Traitor devine activ
             },
             started: false
         };
@@ -794,22 +853,67 @@ function processNightResults(roomCode) {
     let victim = null;
     let saved = false;
     let detectiveResult = null;
+    let seerRevelations = []; // Pentru SEER modifier
     
     // Verifică dacă victima a fost salvată
     if (actions.mafia !== undefined) {
         if (actions.mafia !== actions.doctor) {
             victim = room.players.find(p => p.id === actions.mafia);
             if (victim) {
-                victim.alive = false;
-                room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== victim.id);
-                room.gameState.deadPlayers.push(victim);
+                const targetForSeer = victim; // Salvează referință pentru SEER
+                
+                // HEALER MODIFIER: Verifică dacă victima are modifier HEALER
+                if (victim.modifier === 'HEALER') {
+                    victim.hitCount = (victim.hitCount || 0) + 1;
+                    if (victim.hitCount < 2) {
+                        // Supraviețuiește prima lovitură
+                        saved = true;
+                        victim = null; // Nu moare
+                        console.log(`🛡️ ${targetForSeer.name} a supraviețuit datorită modifier-ului HEALER (${targetForSeer.hitCount}/2)`);
+                    } else {
+                        // A doua lovitură - moare
+                        victim.alive = false;
+                        room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== victim.id);
+                        room.gameState.deadPlayers.push(victim);
+                    }
+                } else {
+                    // Fără HEALER - moare direct
+                    victim.alive = false;
+                    room.gameState.alivePlayers = room.gameState.alivePlayers.filter(p => p.id !== victim.id);
+                    room.gameState.deadPlayers.push(victim);
+                }
+                
+                // SEER MODIFIER: Mafia cu SEER vede rolul victimei (chiar dacă a supraviețuit)
+                const mafiaMembers = room.gameState.alivePlayers.filter(p => p.role === 'MAFIA');
+                mafiaMembers.forEach(mafioso => {
+                    if (mafioso.modifier === 'SEER') {
+                        seerRevelations.push({
+                            playerId: mafioso.id,
+                            targetName: targetForSeer.name,
+                            targetRole: targetForSeer.role
+                        });
+                    }
+                });
             }
         } else {
             saved = true;
+            
+            // SEER MODIFIER: Doctor cu SEER vede rolul celui salvat
+            const savedPlayer = room.players.find(p => p.id === actions.doctor);
+            const doctors = room.gameState.alivePlayers.filter(p => p.role === 'DOCTOR');
+            doctors.forEach(doctor => {
+                if (doctor.modifier === 'SEER' && savedPlayer) {
+                    seerRevelations.push({
+                        playerId: doctor.id,
+                        targetName: savedPlayer.name,
+                        targetRole: savedPlayer.role
+                    });
+                }
+            });
         }
     }
     
-    // Rezultat detectiv
+    // Rezultat detectiv + SEER modifier
     if (actions.detective !== undefined) {
         const target = room.players.find(p => p.id === actions.detective);
         if (target) {
@@ -823,11 +927,28 @@ function processNightResults(roomCode) {
             // Trimite rezultatul la TOȚI detectivii
             detectives.forEach(detective => {
                 io.to(detective.id).emit('detective-result', detectiveResult);
+                
+                // SEER MODIFIER: Detective cu SEER vede rolul exact
+                if (detective.modifier === 'SEER') {
+                    seerRevelations.push({
+                        playerId: detective.id,
+                        targetName: target.name,
+                        targetRole: target.role
+                    });
+                }
             });
         }
     }
     
-    // Verifică condiție de victorie
+    // Trimite revelații SEER
+    seerRevelations.forEach(rev => {
+        io.to(rev.playerId).emit('seer-revelation', {
+            targetName: rev.targetName,
+            targetRole: rev.targetRole
+        });
+    });
+    
+    // Verifică condiție de victorie (include TRAITOR activation)
     if (checkWinCondition(roomCode)) {
         return;
     }
@@ -871,19 +992,56 @@ function processVotes(roomCode) {
         voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
     });
     
-    // Găsește cel mai votat
+    // Găsește cel mai votat (și verifică egalități)
     let maxVotes = 0;
-    let eliminated = null;
+    let candidates = []; // Toți cu același număr maxim de voturi
     
     Object.entries(voteCounts).forEach(([playerId, votes]) => {
+        const player = room.players.find(p => p.id === playerId);
+        if (!player) return;
+        
         if (votes > maxVotes) {
-            const player = room.players.find(p => p.id === playerId);
-            if (player) {  // Verifică dacă jucătorul există încă
-                maxVotes = votes;
-                eliminated = player;
-            }
+            maxVotes = votes;
+            candidates = [player];
+        } else if (votes === maxVotes && maxVotes > 0) {
+            candidates.push(player);
         }
     });
+    
+    let eliminated = null;
+    
+    // TIEBREAKER MODIFIER: Dacă sunt 2+ candidați (egalitate)
+    if (candidates.length > 1) {
+        // Caută TIEBREAKER în lista de votanți
+        const voters = Object.keys(room.gameState.votes).map(voterId => {
+            return room.gameState.alivePlayers.find(p => p.id === voterId);
+        }).filter(p => p); // Remove nulls
+        
+        const tiebreaker = voters.find(p => p.modifier === 'TIEBREAKER');
+        
+        if (tiebreaker) {
+            // Votul TIEBREAKER-ului decide
+            const tiebreakerVote = room.gameState.votes[tiebreaker.id];
+            eliminated = candidates.find(c => c.id === tiebreakerVote);
+            
+            if (eliminated) {
+                console.log(`⚖️ TIEBREAKER: Votul lui ${tiebreaker.name} a decis eliminarea lui ${eliminated.name}`);
+                io.to(roomCode).emit('tiebreaker-activated', {
+                    tiebreakerName: tiebreaker.name,
+                    eliminatedName: eliminated.name
+                });
+            } else {
+                // Tiebreaker nu a votat un candidat din egalitate - aleatoriu
+                eliminated = candidates[Math.floor(Math.random() * candidates.length)];
+            }
+        } else {
+            // Fără TIEBREAKER - aleatoriu
+            eliminated = candidates[Math.floor(Math.random() * candidates.length)];
+            console.log(`🎲 Egalitate fără Tiebreaker - ales aleatoriu: ${eliminated.name}`);
+        }
+    } else if (candidates.length === 1) {
+        eliminated = candidates[0];
+    }
     
     if (eliminated) {
         eliminated.alive = false;
@@ -911,13 +1069,39 @@ function processVotes(roomCode) {
     }
 }
 
-// Verifică condiția de victorie
+// Verifică condiția de victorie + TRAITOR activation
 function checkWinCondition(roomCode) {
     const room = gameRooms.get(roomCode);
     if (!room) return false;
     
-    const aliveMafia = room.gameState.alivePlayers.filter(p => p.role === 'MAFIA').length;
+    let aliveMafia = room.gameState.alivePlayers.filter(p => p.role === 'MAFIA').length;
     const aliveTown = room.gameState.alivePlayers.filter(p => p.role !== 'MAFIA').length;
+    
+    // TRAITOR MODIFIER: Dacă toți Mafia au murit și mai sunt 3+ jucători
+    if (aliveMafia === 0 && !room.gameState.traitorActivated && room.gameState.alivePlayers.length >= 3) {
+        // Caută jucători cu modifier TRAITOR
+        const traitor = room.gameState.alivePlayers.find(p => p.modifier === 'TRAITOR' && p.role !== 'MAFIA');
+        
+        if (traitor) {
+            // Activează TRAITOR - devine MAFIA
+            console.log(`🎭 TRAITOR ACTIVAT: ${traitor.name} devine MAFIA!`);
+            traitor.role = 'MAFIA';
+            room.gameState.traitorActivated = true;
+            aliveMafia = 1; // Acum avem 1 Mafia
+            
+            // Notifică traitor-ul și narratorul
+            io.to(traitor.id).emit('traitor-activated', {
+                message: 'Ai devenit IMPOSTOR! Toți ceilalți impostori au murit și tu ești noul impostor.'
+            });
+            
+            const narrator = room.players.find(p => p.role === 'NARRATOR');
+            if (narrator) {
+                io.to(narrator.id).emit('narrator-notification', {
+                    message: `🎭 ${traitor.name} a devenit IMPOSTOR (Traitor activated)!`
+                });
+            }
+        }
+    }
     
     if (aliveMafia === 0) {
         endGame(roomCode, 'town');

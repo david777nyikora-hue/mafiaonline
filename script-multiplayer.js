@@ -398,6 +398,44 @@ function setupSocketListeners() {
         }
     });
     
+    // === MODIFIER EVENTS ===
+    
+    // SEER MODIFIER - Revelație rol țintă
+    socket.on('seer-revelation', (data) => {
+        showNotification(`👁️ SEER: ${data.targetName} este ${ROLES[data.targetRole]?.name || data.targetRole}!`, 'info', 5000);
+        console.log('🔮 Seer revelation:', data);
+    });
+    
+    // TRAITOR MODIFIER - Activare
+    socket.on('traitor-activated', (data) => {
+        myRole = 'MAFIA'; // Acum ești MAFIA
+        showNotification('🎭 ' + data.message, 'warning', 8000);
+        
+        // Update role display dacă există
+        const roleNameEl = document.getElementById('my-role-name');
+        const roleIconEl = document.getElementById('my-role-icon');
+        const roleDescEl = document.getElementById('my-role-description');
+        
+        if (roleNameEl) roleNameEl.textContent = ROLES.MAFIA.name;
+        if (roleIconEl) roleIconEl.textContent = ROLES.MAFIA.icon;
+        if (roleDescEl) roleDescEl.textContent = ROLES.MAFIA.description;
+        
+        console.log('🎭 TRAITOR ACTIVATED - Now MAFIA');
+    });
+    
+    // TIEBREAKER MODIFIER - Notificare activare
+    socket.on('tiebreaker-activated', (data) => {
+        showNotification(`⚖️ TIEBREAKER: Votul lui ${data.tiebreakerName} a decis eliminarea lui ${data.eliminatedName}!`, 'info', 5000);
+        console.log('⚖️ Tiebreaker activated:', data);
+    });
+    
+    // NARRATOR - Notificări speciale
+    socket.on('narrator-notification', (data) => {
+        if (myRole === 'NARRATOR') {
+            showNotification(data.message, 'info', 5000);
+        }
+    });
+    
     // Disconnect/Reconnect events
     socket.on('disconnect', () => {
         console.log('⚠️ Deconectat de la server');
@@ -544,6 +582,12 @@ function createRoom() {
     const detectiveCount = parseInt(document.getElementById('host-detective-count').value);
     const rememberName = document.getElementById('remember-host-name').checked;
     
+    // Modifiers
+    const traitorCount = parseInt(document.getElementById('modifier-traitor-count').value) || 0;
+    const healerCount = parseInt(document.getElementById('modifier-healer-count').value) || 0;
+    const seerCount = parseInt(document.getElementById('modifier-seer-count').value) || 0;
+    const tiebreakerCount = parseInt(document.getElementById('modifier-tiebreaker-count').value) || 0;
+    
     if (!playerName) {
         showNotification('Introdu un nume!', 'error');
         return;
@@ -563,7 +607,26 @@ function createRoom() {
         roleConfig: {
             mafiaCount: mafiaCount,
             doctorCount: doctorCount,
-            detectiveCount: detectiveCount
+            detectiveCount: detectiveCount,
+            modifierConfig: {
+                enabled: (traitorCount + healerCount + seerCount + tiebreakerCount) > 0,
+                traitor: { 
+                    count: traitorCount, 
+                    roleChances: { MAFIA: 10, DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } 
+                },
+                healer: { 
+                    count: healerCount, 
+                    roleChances: { DOCTOR: 50, DETECTIVE: 50, CITIZEN: 50 } 
+                },
+                seer: { 
+                    count: seerCount, 
+                    roleChances: { MAFIA: 50, DOCTOR: 50, CITIZEN: 50 } 
+                },
+                tiebreaker: { 
+                    count: tiebreakerCount, 
+                    roleChances: { MAFIA: 10, DOCTOR: 90, DETECTIVE: 90, CITIZEN: 90 } 
+                }
+            }
         }
     });
 }
@@ -583,8 +646,8 @@ function joinRoom() {
         return;
     }
     
-    if (!code || code.length !== 6) {
-        showNotification('Introdu un cod valid de 6 caractere!', 'error');
+    if (!code || code.length !== 4) {
+        showNotification('Introdu un cod valid de 4 caractere!', 'error');
         return;
     }
     
@@ -695,7 +758,7 @@ function showTeamInfo(roleName, team, roleCard) {
 function showNarratorScreen() {
     switchScreen('narrator-screen');
     
-    // Populează lista de jucători cu roluri
+    // Populează lista de jucători cu roluri + modifiers
     const playersList = document.getElementById('narrator-players-list');
     playersList.innerHTML = '';
     
@@ -703,9 +766,28 @@ function showNarratorScreen() {
         const roleInfo = ROLES[player.role] || { icon: '❓', name: player.role };
         const playerItem = document.createElement('div');
         playerItem.className = `narrator-player-item ${player.alive ? 'alive' : 'dead'}`;
+        
+        // Modifier display (doar pentru narrator)
+        let modifierBadge = '';
+        if (player.modifier) {
+            const modifierIcons = {
+                'TRAITOR': '🎭',
+                'HEALER': '🛡️',
+                'SEER': '👁️',
+                'TIEBREAKER': '⚖️'
+            };
+            const modifierNames = {
+                'TRAITOR': 'Traitor',
+                'HEALER': 'Healer',
+                'SEER': 'Seer',
+                'TIEBREAKER': 'Tiebreaker'
+            };
+            modifierBadge = `<span class="modifier-badge" style="font-size: 0.8rem; color: #ffd700; margin-left: 8px;">${modifierIcons[player.modifier]} ${modifierNames[player.modifier]}</span>`;
+        }
+        
         playerItem.innerHTML = `
             <span class="player-name">${player.alive ? '✅' : '💀'} ${player.name}</span>
-            <span class="player-role ${ROLES[player.role]?.class || ''}">${roleInfo.icon} ${roleInfo.name}</span>
+            <span class="player-role ${ROLES[player.role]?.class || ''}">${roleInfo.icon} ${roleInfo.name}${modifierBadge}</span>
         `;
         playersList.appendChild(playerItem);
     });
@@ -1291,22 +1373,23 @@ function switchScreen(screenId) {
     document.getElementById(screenId).classList.add('active');
 }
 
-function showNotification(message, type = 'info') {
+function showNotification(message, type = 'info', duration = 3000) {
     // Crează notificare
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
-    notification.textContent = message;
+    notification.innerHTML = message; // Schimbat la innerHTML pentru formatare
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
         padding: 15px 25px;
-        background: ${type === 'error' ? '#ff3333' : type === 'success' ? '#33ff99' : '#3399ff'};
+        background: ${type === 'error' ? '#ff3333' : type === 'success' ? '#33ff99' : type === 'warning' ? '#ff9933' : '#3399ff'};
         color: ${type === 'success' ? '#000' : '#fff'};
         border-radius: 10px;
         box-shadow: 0 5px 20px rgba(0,0,0,0.5);
         z-index: 10000;
         animation: slideIn 0.3s ease-out;
+        max-width: 400px;
     `;
     
     document.body.appendChild(notification);
@@ -1314,7 +1397,7 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease-out';
         setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    }, duration);
 }
 
 // CSS pentru animații notificări
